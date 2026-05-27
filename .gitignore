@@ -4,3 +4,9 @@ target/
 *.log
 .DS_Store
 Thumbs.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+tauri-output.txt
+tauri-error.txt
