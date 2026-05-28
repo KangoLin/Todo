@@ -55,6 +55,7 @@ pub fn run() {
             // Columns
             commands::column_cmds::create_column,
             commands::column_cmds::get_columns_by_board,
+            commands::column_cmds::get_columns_by_project,
             commands::column_cmds::update_column,
             commands::column_cmds::delete_column,
             commands::column_cmds::reorder_columns,
@@ -68,6 +69,7 @@ pub fn run() {
             commands::card_cmds::archive_card,
             commands::card_cmds::restore_card,
             commands::card_cmds::get_archived_cards_by_board,
+            commands::card_cmds::copy_card_cmd,
             commands::card_cmds::delete_card,
             // Subtasks
             commands::subtask_cmds::create_subtask,
@@ -80,6 +82,12 @@ pub fn run() {
             commands::tag_cmds::add_tag_to_card,
             commands::tag_cmds::remove_tag_from_card,
             commands::tag_cmds::get_tags_by_card,
+            // Comments
+            commands::comment_cmds::create_comment,
+            commands::comment_cmds::get_comments_by_card,
+            commands::comment_cmds::delete_comment,
+            // Activities
+            commands::activity_cmds::get_activities_by_board,
             // Search
             commands::search_cmds::search_cards,
             // Settings

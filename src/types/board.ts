@@ -6,4 +6,5 @@ export interface Board {
   sort_order: number
   created_at: string
   updated_at: string
+  background: string | null
 }

@@ -1,11 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getColumnsByBoard, createColumn, updateColumn, deleteColumn, reorderColumns } from '../lib/tauri-api'
+import { getColumnsByBoard, createColumn, updateColumn, deleteColumn, reorderColumns, getColumnsByProject } from '../lib/tauri-api'
 
 export function useColumns(boardId: string | undefined) {
   return useQuery({
     queryKey: ['columns', boardId],
     queryFn: () => getColumnsByBoard(boardId!),
     enabled: !!boardId,
+  })
+}
+
+export function useColumnsByProject(projectId: string | undefined) {
+  return useQuery({
+    queryKey: ['columns_by_project', projectId],
+    queryFn: () => getColumnsByProject(projectId!),
+    enabled: !!projectId,
   })
 }
 

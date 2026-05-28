@@ -9,6 +9,7 @@ pub struct Board {
     pub sort_order: i32,
     pub created_at: String,
     pub updated_at: String,
+    pub background: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,4 +22,5 @@ pub struct CreateBoardRequest {
 pub struct UpdateBoardRequest {
     pub id: String,
     pub name: Option<String>,
+    pub background: Option<String>,
 }

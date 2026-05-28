@@ -7,3 +7,5 @@ pub mod tag_cmds;
 pub mod search_cmds;
 pub mod settings_cmds;
 pub mod data_cmds;
+pub mod comment_cmds;
+pub mod activity_cmds;

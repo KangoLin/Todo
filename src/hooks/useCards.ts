@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCardsByColumn, getCard, createCard, updateCard, deleteCard, archiveCard, restoreCard, getArchivedCardsByBoard, moveCard, moveCardWithinColumn } from '../lib/tauri-api'
+import { getCardsByColumn, getCard, createCard, updateCard, deleteCard, archiveCard, restoreCard, getArchivedCardsByBoard, moveCard, moveCardWithinColumn, copyCard } from '../lib/tauri-api'
 
 export function useCards(columnId: string | undefined) {
   return useQuery({
@@ -91,6 +91,15 @@ export function useMoveCardWithinColumn() {
   return useMutation({
     mutationFn: (params: { cardId: string; targetSortOrder: number }) =>
       moveCardWithinColumn(params.cardId, params.targetSortOrder),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cards'] }),
+  })
+}
+
+export function useCopyCard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { cardId: string; targetColumnId: string }) =>
+      copyCard(params.cardId, params.targetColumnId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['cards'] }),
   })
 }

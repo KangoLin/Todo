@@ -13,6 +13,8 @@ export interface Card {
   is_archived: number
   created_at: string
   updated_at: string
+  subtask_done: number
+  subtask_total: number
 }
 
 export interface CardDetail {

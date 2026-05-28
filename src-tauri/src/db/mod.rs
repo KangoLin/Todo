@@ -6,6 +6,8 @@ pub mod cards;
 pub mod subtasks;
 pub mod tags;
 pub mod search;
+pub mod comments;
+pub mod activities;
 
 use rusqlite::Connection;
 use std::sync::Mutex;

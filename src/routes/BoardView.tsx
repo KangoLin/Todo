@@ -4,13 +4,15 @@ import { useQueryClient } from '@tanstack/react-query'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Checkbox from '@radix-ui/react-checkbox'
-import { Plus, MoreHorizontal, Pencil, Trash2, Archive, ArrowLeft, Check, X, ListTodo, Calendar, Tag as TagIcon, GripVertical, RotateCcw, PanelRightOpen, PanelRightClose, Inbox } from 'lucide-react'
+import { Plus, MoreHorizontal, Pencil, Trash2, Archive, Copy, ArrowLeft, Check, X, ListTodo, Calendar, Tag as TagIcon, GripVertical, RotateCcw, PanelRightOpen, Inbox } from 'lucide-react'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element'
-import { useColumns, useCreateColumn, useUpdateColumn, useDeleteColumn, useReorderColumns } from '../hooks/useColumns'
-import { useBoardById } from '../hooks/useBoard'
-import { useCards, useCardDetail, useCreateCard, useUpdateCard, useDeleteCard, useArchiveCard, useRestoreCard, useMoveCard, useMoveCardWithinColumn, useArchivedCards } from '../hooks/useCards'
+import { useColumns, useColumnsByProject, useCreateColumn, useUpdateColumn, useDeleteColumn, useReorderColumns } from '../hooks/useColumns'
+import { useBoardById, useUpdateBoard, useBoards, useProject } from '../hooks/useBoard'
+import { useCards, useCardDetail, useCreateCard, useUpdateCard, useDeleteCard, useArchiveCard, useRestoreCard, useMoveCard, useMoveCardWithinColumn, useArchivedCards, useCopyCard } from '../hooks/useCards'
 import { useCreateSubtask, useToggleSubtask, useDeleteSubtask } from '../hooks/useSubtasks'
+import { useComments, useCreateComment, useDeleteComment } from '../hooks/useComments'
+import { useActivities } from '../hooks/useActivities'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useBoardStore } from '../stores/boardStore'
 import { useDragStore } from '../stores/dragStore'
@@ -21,7 +23,22 @@ import { TagSelector } from '../components/tags/TagSelector'
 import { TagManager } from '../components/tags/TagManager'
 import { RichTextEditor } from '../components/editor/RichTextEditor'
 
-function CardDetailDialog({ cardId, open, onOpenChange, onDeleted, boardId }: { cardId: string | null; open: boolean; onOpenChange: (open: boolean) => void; onDeleted?: () => void; boardId?: string }) {
+const BOARD_BACKGROUNDS = [
+  { label: '无', value: '' },
+  { label: '蓝色', value: '#0079bf' },
+  { label: '橙色', value: '#d29034' },
+  { label: '绿色', value: '#519839' },
+  { label: '红色', value: '#b04632' },
+  { label: '紫色', value: '#89609e' },
+  { label: '粉色', value: '#cd5a91' },
+  { label: '青色', value: '#00aecc' },
+  { label: '灰色', value: '#838c91' },
+  { label: '深绿', value: '#0e6c39' },
+  { label: '深紫', value: '#7f3f98' },
+  { label: '黑色', value: '#1a1a2e' },
+]
+
+function CardDetailDialog({ cardId, open, onOpenChange, onDeleted, onCopyMove, boardId }: { cardId: string | null; open: boolean; onOpenChange: (open: boolean) => void; onDeleted?: () => void; onCopyMove?: (id: string) => void; boardId?: string }) {
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
   const { data: detail, isLoading } = useCardDetail(cardId)
 
@@ -33,7 +50,6 @@ function CardDetailDialog({ cardId, open, onOpenChange, onDeleted, boardId }: { 
 
   useEffect(() => {
     if (detail) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(detail.card.title)
       setDescription(detail.card.description)
       setPriority(detail.card.priority)
@@ -54,118 +70,180 @@ function CardDetailDialog({ cardId, open, onOpenChange, onDeleted, boardId }: { 
   }, [description, detail, updateMut])
 
   const deleteMut = useDeleteCard()
-
   const archiveMut = useArchiveCard()
-
   const createSubtaskMut = useCreateSubtask()
-
   const toggleSubtaskMut = useToggleSubtask()
-
   const deleteSubtaskMut = useDeleteSubtask()
 
   if (!cardId) return null
 
   const doneCount = detail?.subtasks.filter(s => s.is_done).length ?? 0
   const totalCount = detail?.subtasks.length ?? 0
+  const isOverdue = detail?.card.due_date && new Date(detail.card.due_date) < new Date(new Date().toDateString())
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-xl shadow-xl border border-border p-0 w-full max-w-lg max-h-[85vh] flex flex-col z-50">
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40 animate-fade-in data-[state=closed]:animate-fade-out" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-xl shadow-xl border border-border p-0 w-full max-w-3xl max-h-[85vh] flex flex-col z-50 animate-fade-in data-[state=closed]:animate-fade-out">
           {isLoading ? (
             <div className="py-16 text-center text-text-secondary">加载中...</div>
           ) : detail ? (
             <>
               {coverColor && <div className="h-2 rounded-t-xl shrink-0" style={{ backgroundColor: coverColor }} />}
-              <div className="p-5 overflow-y-auto flex-1">
-                <div className="flex items-start gap-3 mb-4">
-                  <input value={title} onChange={e => setTitle(e.target.value)} onBlur={() => title !== detail.card.title && updateMut.mutate({ id: cardId!, title })} className="flex-1 text-lg font-bold bg-transparent border-none outline-none px-0 py-0" />
-                  <button onClick={() => onOpenChange(false)} className="p-1 text-text-secondary hover:text-text"><X size={18} /></button>
-                </div>
-
-                <div className="flex items-center gap-2 mb-4 flex-wrap">
-                  <span className="text-xs text-text-secondary">优先级</span>
-                  {PRIORITY_LABELS.map((label, i) => (
-                    <button key={i} onClick={() => { setPriority(i); updateMut.mutate({ id: cardId!, priority: i }) }} className={'px-2.5 py-1 rounded text-xs font-medium border ' + (priority === i ? 'text-white border-transparent' : 'text-text-secondary border-border hover:border-text-secondary')} style={priority === i ? { backgroundColor: PRIORITY_COLORS[i] } : undefined}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-4 mb-4">
-                  <div>
-                    <label className="text-xs font-medium text-text-secondary block mb-1">截止日期</label>
-                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} onBlur={() => dueDate !== (detail.card.due_date ?? '') && updateMut.mutate({ id: cardId!, dueDate: dueDate || undefined })} className="px-3 py-1.5 rounded-lg border border-border bg-surface text-sm" />
+              <div className="flex flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-5">
+                  <div className="flex items-start gap-3 mb-3">
+                    <input value={title} onChange={e => setTitle(e.target.value)} onBlur={() => title !== detail.card.title && updateMut.mutate({ id: cardId!, title })} className="flex-1 text-xl font-bold bg-transparent border-none outline-none px-0 py-0" placeholder="卡片标题" />
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-text-secondary block mb-1">封面色</label>
-                    <input type="color" value={coverColor || '#6366f1'} onChange={e => setCoverColor(e.target.value)} onBlur={() => updateMut.mutate({ id: cardId!, coverColor })} className="w-9 h-9 rounded cursor-pointer" />
-                  </div>
-                </div>
 
-                <div className="mb-4">
-                  <label className="text-xs font-medium text-text-secondary block mb-1">描述</label>
-                  <RichTextEditor content={description} onChange={setDescription} />
-                </div>
-
-                <div className="mb-4">
-                  <label className="text-xs font-medium text-text-secondary block mb-2 flex items-center gap-1"><ListTodo size={14} /> 子任务 {totalCount > 0 && <span className="text-text-secondary">({doneCount}/{totalCount})</span>}</label>
-                  {totalCount > 0 && (
-                    <div className="h-1.5 bg-border rounded-full mb-2 overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(doneCount / totalCount) * 100}%` }} />
-                    </div>
-                  )}
-                  <div className="space-y-1 mb-2">
-                    {detail.subtasks.map(st => (
-                      <div key={st.id} className="flex items-center gap-2 group py-0.5">
-                        <Checkbox.Root checked={!!st.is_done} onCheckedChange={() => toggleSubtaskMut.mutate({ id: st.id, cardId: cardId! })} className="w-4 h-4 rounded border border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary flex items-center justify-center shrink-0">
-                          <Checkbox.Indicator><Check size={12} className="text-white" /></Checkbox.Indicator>
-                        </Checkbox.Root>
-                        <span className={'text-sm flex-1 ' + (st.is_done ? 'line-through text-text-secondary' : '')}>{st.title}</span>
-                        <button onClick={() => deleteSubtaskMut.mutate({ id: st.id, cardId: cardId! })} className="p-0.5 text-text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={12} /></button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-1">
-                    <input value={newSubtaskTitle} onChange={e => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && newSubtaskTitle.trim() && createSubtaskMut.mutate({ cardId: cardId!, title: newSubtaskTitle.trim() }, { onSuccess: () => setNewSubtaskTitle('') })} className="flex-1 px-2 py-1.5 text-sm rounded border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-primary" placeholder="添加子任务..." />
-                    {newSubtaskTitle.trim() && <button onClick={() => createSubtaskMut.mutate({ cardId: cardId!, title: newSubtaskTitle.trim() }, { onSuccess: () => setNewSubtaskTitle('') })} className="px-2 py-1.5 text-sm rounded bg-primary text-white"><Plus size={14} /></button>}
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <label className="text-xs font-medium text-text-secondary block mb-2 flex items-center gap-1"><TagIcon size={14} /> 标签</label>
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap mb-4">
                     {detail.tags.map(t => (
                       <TagBadge key={t.id} name={t.name} color={t.color} />
                     ))}
                     {boardId && <TagSelector boardId={boardId} cardId={cardId} />}
                   </div>
+
+                  {dueDate && (
+                    <div className={'flex items-center gap-1.5 mb-3 text-xs px-2 py-1 rounded-lg w-fit ' + (isOverdue ? 'bg-red-50 dark:bg-red-950/30 text-red-600' : 'bg-surface-secondary/50 text-text-secondary')}>
+                      <Calendar size={13} />
+                      <span>{new Date(dueDate).toLocaleDateString('zh-CN')}</span>
+                      {isOverdue && <span className="font-medium">（已逾期）</span>}
+                    </div>
+                  )}
+
+                  <div className="mb-4">
+                    <label className="text-xs font-medium text-text-secondary block mb-1">描述</label>
+                    <RichTextEditor content={description} onChange={setDescription} />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-text-secondary block mb-2 flex items-center gap-1"><ListTodo size={14} /> 子任务 {totalCount > 0 && <span className="text-text-secondary">({doneCount}/{totalCount})</span>}</label>
+                    {totalCount > 0 && (
+                      <div className="h-1.5 bg-border rounded-full mb-2 overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${(doneCount / totalCount) * 100}%` }} />
+                      </div>
+                    )}
+                    <div className="space-y-1 mb-2">
+                      {detail.subtasks.map(st => (
+                        <div key={st.id} className="flex items-center gap-2 group py-0.5">
+                          <Checkbox.Root checked={!!st.is_done} onCheckedChange={() => toggleSubtaskMut.mutate({ id: st.id, cardId: cardId! })} className="w-4 h-4 rounded border border-border data-[state=checked]:bg-primary data-[state=checked]:border-primary flex items-center justify-center shrink-0">
+                            <Checkbox.Indicator><Check size={12} className="text-white" /></Checkbox.Indicator>
+                          </Checkbox.Root>
+                          <span className={'text-sm flex-1 ' + (st.is_done ? 'line-through text-text-secondary' : '')}>{st.title}</span>
+                          <button onClick={() => deleteSubtaskMut.mutate({ id: st.id, cardId: cardId! })} className="p-0.5 text-text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-1">
+                      <input value={newSubtaskTitle} onChange={e => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && newSubtaskTitle.trim() && createSubtaskMut.mutate({ cardId: cardId!, title: newSubtaskTitle.trim() }, { onSuccess: () => setNewSubtaskTitle('') })} className="flex-1 px-2 py-1.5 text-sm rounded border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-primary" placeholder="添加子任务..." />
+                      {newSubtaskTitle.trim() && <button onClick={() => createSubtaskMut.mutate({ cardId: cardId!, title: newSubtaskTitle.trim() }, { onSuccess: () => setNewSubtaskTitle('') })} className="px-2 py-1.5 text-sm rounded bg-primary text-white"><Plus size={14} /></button>}
+                    </div>
+                  </div>
+
+                  <CommentSection cardId={cardId!} />
                 </div>
-              </div>
-              <div className="flex items-center gap-2 px-5 py-3 border-t border-border shrink-0">
-                <button onClick={() => archiveMut.mutate(cardId!, { onSuccess: () => onOpenChange(false) })} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-surface-secondary text-text-secondary"><Archive size={12} /> 归档</button>
-                <button onClick={() => { if (confirm('确认删除？')) deleteMut.mutate(cardId!, { onSuccess: () => { onOpenChange(false); onDeleted?.() } }) }} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-red-200 hover:bg-red-50 text-red-500 ml-auto"><Trash2 size={12} /> 删除</button>
+
+                <div className="w-56 shrink-0 border-l border-border p-4 overflow-y-auto bg-surface-secondary/20">
+                  <div className="mb-5">
+                    <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">添加到卡片</h3>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-surface-secondary cursor-pointer text-sm text-text-secondary" onClick={() => {}}>
+                        <TagIcon size={14} /> 标签
+                      </div>
+                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm">
+                        <Calendar size={14} className="text-text-secondary shrink-0" />
+                        <input type="date" value={dueDate} onChange={e => { setDueDate(e.target.value); updateMut.mutate({ id: cardId!, dueDate: e.target.value || undefined }) }} className="flex-1 bg-transparent text-sm text-text-secondary outline-none cursor-pointer [&::-webkit-calendar-picker-indicator]:dark:invert" />
+                      </div>
+                      <div className="px-2 py-1.5 rounded-lg text-sm">
+                        <span className="text-text-secondary text-xs block mb-1">优先级</span>
+                        <div className="flex gap-1">
+                          {PRIORITY_LABELS.map((label, i) => (
+                            <button key={i} onClick={() => { setPriority(i); updateMut.mutate({ id: cardId!, priority: i }) }} className={'flex-1 px-1.5 py-1 rounded text-xs font-medium border ' + (priority === i ? 'text-white border-transparent' : 'text-text-secondary border-border hover:border-text-secondary')} style={priority === i ? { backgroundColor: PRIORITY_COLORS[i] } : undefined}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm">
+                        <label className="flex items-center gap-2 text-text-secondary cursor-pointer w-full">
+                          <div className="w-3.5 h-3.5 rounded border border-border" style={{ backgroundColor: coverColor || '#6366f1' }} />
+                          封面色
+                          <input type="color" value={coverColor || '#6366f1'} onChange={e => { setCoverColor(e.target.value); updateMut.mutate({ id: cardId!, coverColor: e.target.value }) }} className="absolute opacity-0 w-0" />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">操作</h3>
+                    <div className="space-y-1.5">
+                      <button onClick={() => { onCopyMove?.(cardId!); onOpenChange(false) }} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg hover:bg-surface-secondary text-sm text-text-secondary">
+                        <Copy size={14} /> 复制
+                      </button>
+                      <button onClick={() => { onCopyMove?.(cardId!); onOpenChange(false) }} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg hover:bg-surface-secondary text-sm text-text-secondary">
+                        <ArrowLeft size={14} className="rotate-90" /> 移动
+                      </button>
+                      <button onClick={() => archiveMut.mutate(cardId!, { onSuccess: () => onOpenChange(false) })} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg hover:bg-surface-secondary text-sm text-text-secondary">
+                        <Archive size={14} /> 归档
+                      </button>
+                      <button onClick={() => { if (confirm('确认删除？')) deleteMut.mutate(cardId!, { onSuccess: () => { onOpenChange(false); onDeleted?.() } }) }} className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-sm text-red-500">
+                        <Trash2 size={14} /> 删除
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </>
           ) : null}
+          <button onClick={() => onOpenChange(false)} className="absolute top-3 right-3 p-1 rounded hover:bg-surface-secondary text-text-secondary z-10"><X size={18} /></button>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   )
 }
 
-function CardView({ card, columnId, onEdit, onDelete, onArchive }: {
-  card: { id: string; title: string; priority: number; due_date: string | null; cover_color: string | null }
+function CommentSection({ cardId }: { cardId: string }) {
+  const { data: comments } = useComments(cardId)
+  const createMut = useCreateComment()
+  const deleteMut = useDeleteComment()
+  const [text, setText] = useState('')
+
+  return (
+    <div className="mt-5">
+      <label className="text-xs font-medium text-text-secondary block mb-2">评论</label>
+      <div className="space-y-2 mb-3">
+        {comments?.map(c => (
+          <div key={c.id} className="group flex items-start gap-2 px-3 py-2 rounded-lg bg-surface-secondary/30 text-sm">
+            <span className="flex-1 whitespace-pre-wrap break-words">{c.content}</span>
+            <span className="text-[10px] text-text-secondary mt-0.5 shrink-0 whitespace-nowrap">{new Date(c.created_at).toLocaleDateString('zh-CN')}</span>
+            <button onClick={() => deleteMut.mutate({ id: c.id, cardId })} className="p-0.5 text-text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><X size={12} /></button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <input value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && text.trim() && createMut.mutate({ cardId, content: text.trim() }, { onSuccess: () => setText('') })} className="flex-1 px-2 py-1.5 text-sm rounded border border-border bg-surface focus:outline-none focus:ring-1 focus:ring-primary" placeholder="写评论..." />
+        {text.trim() && <button onClick={() => createMut.mutate({ cardId, content: text.trim() }, { onSuccess: () => setText('') })} className="px-2 py-1.5 text-sm rounded bg-primary text-white"><Check size={14} /></button>}
+      </div>
+    </div>
+  )
+}
+
+function CardView({ card, columnId, onEdit, onDelete, onArchive, onCopy }: {
+  card: { id: string; title: string; priority: number; due_date: string | null; cover_color: string | null; subtask_done: number; subtask_total: number }
   columnId: string
   onEdit: () => void
   onDelete: () => void
   onArchive: () => void
+  onCopy: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const setDraggedCardId = useDragStore(s => s.setDraggedCardId)
   const draggedCardId = useDragStore(s => s.draggedCardId)
   const isDragging = draggedCardId === card.id
+  const isOverdue = card.due_date && new Date(card.due_date) < new Date(new Date().toDateString())
+  const hasSubtasks = card.subtask_total > 0
+  const subPct = hasSubtasks ? Math.round((card.subtask_done / card.subtask_total) * 100) : 0
 
   useEffect(() => {
     const el = ref.current
@@ -173,12 +251,8 @@ function CardView({ card, columnId, onEdit, onDelete, onArchive }: {
     return draggable({
       element: el,
       getInitialData: () => ({ cardId: card.id, type: 'card', columnId }),
-      onDragStart: () => {
-        setDraggedCardId(card.id)
-      },
-      onDrop: () => {
-        setDraggedCardId(null)
-      },
+      onDragStart: () => setDraggedCardId(card.id),
+      onDrop: () => setDraggedCardId(null),
     })
   }, [card.id, columnId, setDraggedCardId])
 
@@ -186,42 +260,66 @@ function CardView({ card, columnId, onEdit, onDelete, onArchive }: {
     <div
       ref={ref}
       onClick={onEdit}
-      className={'group bg-surface rounded-lg border p-3 cursor-pointer transition-all active:cursor-grabbing ' + (isDragging ? 'opacity-40 shadow-none border-dashed' : 'border-border hover:shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_2px_8px_rgba(0,0,0,0.3)] hover:border-primary/30')}
+      className={'group bg-surface rounded-lg border cursor-pointer transition-all duration-200 active:cursor-grabbing overflow-hidden ' + (isDragging ? 'opacity-40 shadow-none border-dashed' : 'border-border hover:shadow-[0_2px_8px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_2px_8px_rgba(0,0,0,0.3)] hover:border-primary/30 hover:-translate-y-0.5')}
     >
-      {card.cover_color && <div className="h-1.5 -mx-3 -mt-3 mb-2 rounded-t-lg" style={{ backgroundColor: card.cover_color }} />}
-      <div className="flex items-start justify-between gap-1">
-        <span className="text-sm font-medium leading-snug">{card.title}</span>
-        <div onClick={e => e.stopPropagation()}>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button className="p-1 rounded hover:bg-surface-secondary opacity-0 group-hover:opacity-100 transition-opacity"><MoreHorizontal size={14} /></button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content className="bg-surface border border-border rounded-lg shadow-lg p-1 min-w-[120px] z-50">
-                <DropdownMenu.Item onClick={onEdit} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer"><Pencil size={14} /> 编辑</DropdownMenu.Item>
-                <DropdownMenu.Item onClick={onArchive} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer"><Archive size={14} /> 归档</DropdownMenu.Item>
-                <DropdownMenu.Item onClick={onDelete} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer text-red-500"><Trash2 size={14} /> 删除</DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+      {card.cover_color && <div className="h-2" style={{ backgroundColor: card.cover_color }} />}
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-1">
+          <div className="flex items-start gap-1.5 flex-1 min-w-0">
+            {card.priority > 0 && (
+              <div className="w-1 h-4 rounded-full mt-1 shrink-0" style={{ backgroundColor: PRIORITY_COLORS[card.priority] }} />
+            )}
+            <span className="text-sm font-medium leading-snug line-clamp-3">{card.title}</span>
+          </div>
+          <div onClick={e => e.stopPropagation()} className="shrink-0">
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button className="p-1 rounded hover:bg-surface-secondary opacity-0 group-hover:opacity-100 transition-opacity"><MoreHorizontal size={14} /></button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content className="bg-surface border border-border rounded-lg shadow-lg p-1 min-w-[120px] z-50">
+                  <DropdownMenu.Item onClick={onEdit} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer"><Pencil size={14} /> 编辑</DropdownMenu.Item>
+                  <DropdownMenu.Item onClick={onCopy} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer"><Copy size={14} /> 复制/移动</DropdownMenu.Item>
+                  <DropdownMenu.Item onClick={onArchive} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer"><Archive size={14} /> 归档</DropdownMenu.Item>
+                  <DropdownMenu.Item onClick={onDelete} className="flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-surface-secondary cursor-pointer text-red-500"><Trash2 size={14} /> 删除</DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
         </div>
+        <div className="flex items-center gap-2 mt-1.5 text-xs text-text-secondary">
+          {card.priority > 0 && (
+            <span className="px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: PRIORITY_COLORS[card.priority] + '20', color: PRIORITY_COLORS[card.priority] }}>{PRIORITY_LABELS[card.priority]}</span>
+          )}
+          {card.due_date && (
+            <span className={'flex items-center gap-0.5 ' + (isOverdue ? 'text-red-500 font-medium' : '')}>
+              <Calendar size={10} />{new Date(card.due_date).toLocaleDateString('zh-CN')}
+            </span>
+          )}
+          {hasSubtasks && (
+            <span className="flex items-center gap-1 ml-auto">
+              <span className={'w-2 h-2 rounded-full ' + (subPct === 100 ? 'bg-green-500' : 'bg-text-secondary/30')} />
+              {card.subtask_done}/{card.subtask_total}
+            </span>
+          )}
+        </div>
+        {hasSubtasks && subPct < 100 && (
+          <div className="h-1 bg-border/60 rounded-full mt-2 overflow-hidden">
+            <div className="h-full rounded-full bg-primary/60 transition-all" style={{ width: `${subPct}%` }} />
+          </div>
+        )}
       </div>
-      {(card.priority > 0 || card.due_date) && (
-        <div className="flex items-center gap-2 mt-2 text-xs text-text-secondary">
-          {card.priority > 0 && <span className="px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: PRIORITY_COLORS[card.priority] + '20', color: PRIORITY_COLORS[card.priority] }}>{PRIORITY_LABELS[card.priority]}</span>}
-          {card.due_date && <span className="flex items-center gap-0.5"><Calendar size={10} />{new Date(card.due_date).toLocaleDateString('zh-CN')}</span>}
-        </div>
-      )}
     </div>
   )
 }
 
-function ColumnView({ column, columnIndex, onEditCard, onDeleteCard, onArchiveCard, onDrop, onColumnDrop, boardId }: {
+function ColumnView({ column, columnIndex, onEditCard, onDeleteCard, onArchiveCard, onCopyCard, onDrop, onColumnDrop, boardId }: {
   column: ColumnType
   columnIndex: number
   onEditCard: (id: string) => void
   onDeleteCard: (id: string) => void
   onArchiveCard: (id: string) => void
+  onCopyCard: (id: string) => void
   onDrop: (cardId: string, targetColumnId: string, sourceColumnId?: string) => void
   onColumnDrop: (draggedColumnId: string, targetColumnId: string) => void
   boardId: string
@@ -352,6 +450,7 @@ function ColumnView({ column, columnIndex, onEditCard, onDeleteCard, onArchiveCa
             onEdit={() => onEditCard(card.id)}
             onDelete={() => { if (confirm('确认删除？')) deleteMut.mutate(card.id); onDeleteCard(card.id) }}
             onArchive={() => { archiveMut.mutate(card.id); onArchiveCard(card.id) }}
+            onCopy={() => onCopyCard(card.id)}
           />
         ))}
         {(!cards || cards.length === 0) && (
@@ -378,44 +477,167 @@ function ColumnView({ column, columnIndex, onEditCard, onDeleteCard, onArchiveCa
   )
 }
 
-function ArchivePanel({ boardId, open, onClose }: { boardId: string; open: boolean; onClose: () => void }) {
+function BoardMenuPanel({ boardId, open, onClose }: { boardId: string; open: boolean; onClose: () => void }) {
+  const { data: board } = useBoardById(boardId)
   const { data: archivedCards } = useArchivedCards(boardId)
   const { data: columns } = useColumns(boardId)
+  const { data: project } = useProject(board?.project_id)
   const restoreMut = useRestoreCard()
   const deleteMut = useDeleteCard()
+  const updateBoardMut = useUpdateBoard()
+  const [tab, setTab] = useState<'info' | 'bg' | 'archive' | 'activity'>('info')
+  const { data: activities } = useActivities(open ? boardId : undefined)
 
   const getColumnName = (columnId: string) => columns?.find(c => c.id === columnId)?.name ?? '未知列'
 
   return (
-    <div className={'fixed top-0 right-0 h-full w-80 bg-surface border-l border-border shadow-2xl z-40 transition-transform duration-300 ' + (open ? 'translate-x-0' : 'translate-x-full')}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h2 className="font-semibold text-sm flex items-center gap-2"><Archive size={16} /> 已归档</h2>
-        <button onClick={onClose} className="p-1 rounded hover:bg-surface-secondary text-text-secondary"><X size={16} /></button>
-      </div>
-      <div className="overflow-y-auto h-[calc(100%-49px)] p-3 space-y-2">
-        {(!archivedCards || archivedCards.length === 0) ? (
-          <div className="flex flex-col items-center justify-center py-16 text-text-secondary/50 gap-2">
-            <Inbox size={32} />
-            <span className="text-xs">没有已归档的卡片</span>
-          </div>
-        ) : (
-          archivedCards.map(card => (
-            <div key={card.id} className="p-3 rounded-lg border border-border bg-surface hover:shadow-sm transition-shadow">
-              <span className="text-xs text-text-secondary block mb-1">{getColumnName(card.column_id)}</span>
-              <p className="text-sm font-medium mb-2 line-clamp-2">{card.title}</p>
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => restoreMut.mutate(card.id)} className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-                  <RotateCcw size={11} /> 恢复
-                </button>
-                <button onClick={() => { if (confirm('永久删除？')) deleteMut.mutate(card.id) }} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-text-secondary hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                  <Trash2 size={11} /> 删除
-                </button>
+    <>
+      {open && <div className="fixed inset-0 bg-black/20 z-30 animate-fade-in" onClick={onClose} />}
+      <div className={'fixed top-0 right-0 h-full w-80 bg-surface border-l border-border shadow-2xl z-40 transition-transform duration-300 flex flex-col ' + (open ? 'translate-x-0' : 'translate-x-full')}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <h2 className="font-semibold text-sm flex items-center gap-2"><PanelRightOpen size={16} /> 看板菜单</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-surface-secondary text-text-secondary"><X size={16} /></button>
+        </div>
+        <div className="flex gap-1 px-3 py-2 border-b border-border shrink-0">
+          {(['info', 'bg', 'archive', 'activity'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)}
+              className={'flex-1 px-2 py-1.5 text-xs rounded-lg font-medium transition-colors ' + (tab === t ? 'bg-surface-secondary text-text' : 'text-text-secondary hover:bg-surface-secondary/50')}>
+              {t === 'info' ? '信息' : t === 'bg' ? '背景' : t === 'archive' ? '归档' : '活动'}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          {tab === 'info' && (
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-surface-secondary/50">
+                <p className="text-xs text-text-secondary mb-1">看板名称</p>
+                <p className="text-sm font-medium">{board?.name ?? '-'}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-surface-secondary/50">
+                <p className="text-xs text-text-secondary mb-1">所属项目</p>
+                <p className="text-sm font-medium">{project?.name ?? '-'}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-surface-secondary/50">
+                <p className="text-xs text-text-secondary mb-1">统计</p>
+                <p className="text-sm">列：{columns?.length ?? 0}</p>
+                <p className="text-sm">卡片：{archivedCards !== undefined ? `${archivedCards.length} 已归档` : '-'}</p>
               </div>
             </div>
-          ))
-        )}
+          )}
+          {tab === 'bg' && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">看板背景</p>
+              <div className="grid grid-cols-4 gap-2">
+                {BOARD_BACKGROUNDS.map(bg => (
+                  <button key={bg.value}
+                    onClick={() => updateBoardMut.mutate({ id: boardId, name: board?.name ?? '', projectId: board?.project_id ?? '', background: bg.value || undefined })}
+                    className={'w-14 h-14 rounded-lg border-2 transition-all hover:scale-110 ' + ((board?.background ?? '') === bg.value ? 'border-primary' : 'border-border')}
+                    style={{ backgroundColor: bg.value || 'var(--color-surface)' }}
+                    title={bg.label}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {tab === 'archive' && (
+            <div className="space-y-2">
+              {(!archivedCards || archivedCards.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-12 text-text-secondary/50 gap-2">
+                  <Inbox size={28} />
+                  <span className="text-xs">没有已归档的卡片</span>
+                </div>
+              ) : (
+                archivedCards.map(card => (
+                  <div key={card.id} className="p-3 rounded-lg border border-border bg-surface hover:shadow-sm transition-shadow">
+                    <span className="text-xs text-text-secondary block mb-1">{getColumnName(card.column_id)}</span>
+                    <p className="text-sm font-medium mb-2 line-clamp-2">{card.title}</p>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => restoreMut.mutate(card.id)} className="flex items-center gap-1 px-2 py-1 text-xs rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                        <RotateCcw size={11} /> 恢复
+                      </button>
+                      <button onClick={() => { if (confirm('永久删除？')) deleteMut.mutate(card.id) }} className="flex items-center gap-1 px-2 py-1 text-xs rounded text-text-secondary hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+                        <Trash2 size={11} /> 删除
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+          {tab === 'activity' && (
+            <div className="space-y-2">
+              {(!activities || activities.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-12 text-text-secondary/50 gap-2">
+                  <span className="text-xs">暂无活动记录</span>
+                </div>
+              ) : (
+                activities.map(a => (
+                  <div key={a.id} className="flex items-start gap-2 px-3 py-2 rounded-lg bg-surface-secondary/30 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs">{a.description}</span>
+                      <p className="text-[10px] text-text-secondary mt-0.5">{new Date(a.created_at).toLocaleString('zh-CN')}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
+  )
+}
+
+function CopyMoveDialog({ cardId, boardId, open, onOpenChange }: { cardId: string; boardId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { data: board } = useBoardById(boardId)
+  const { data: allBoards } = useBoards(board?.project_id)
+  const { data: allColumns } = useColumnsByProject(board?.project_id)
+  const copyMut = useCopyCard()
+  const moveMut = useMoveCard()
+  const [targetColumnId, setTargetColumnId] = useState('')
+
+  const grouped = allColumns?.reduce<Record<string, { boardName: string; columns: { id: string; name: string }[] }>>((acc, col) => {
+    const boardName = allBoards?.find(b => b.id === col.board_id)?.name ?? '未知看板'
+    if (!acc[col.board_id]) acc[col.board_id] = { boardName, columns: [] }
+    acc[col.board_id].columns.push({ id: col.id, name: col.name })
+    return acc
+  }, {}) ?? {}
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/40 z-40 animate-fade-in data-[state=closed]:animate-fade-out" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface rounded-xl shadow-xl border border-border p-5 w-full max-w-sm z-50 animate-fade-in data-[state=closed]:animate-fade-out">
+          <Dialog.Title className="text-base font-bold mb-3">复制/移动卡片</Dialog.Title>
+          <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
+            {Object.entries(grouped).map(([boardId, group]) => (
+              <div key={boardId}>
+                <p className="text-xs font-semibold text-text-secondary uppercase mb-1">{group.boardName}</p>
+                {group.columns.map(col => (
+                  <button key={col.id}
+                    onClick={() => setTargetColumnId(col.id)}
+                    className={'block w-full text-left px-3 py-2 text-sm rounded-lg border mb-1 transition-colors ' + (targetColumnId === col.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-surface-secondary')}
+                  >
+                    {col.name}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Dialog.Close className="px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-surface-secondary">取消</Dialog.Close>
+            <button disabled={!targetColumnId || copyMut.isPending}
+              onClick={() => copyMut.mutate({ cardId, targetColumnId }, { onSuccess: () => onOpenChange(false) })}
+              className="px-3 py-1.5 text-sm rounded-lg bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
+            >复制到此</button>
+            <button disabled={!targetColumnId || moveMut.isPending}
+              onClick={() => moveMut.mutate({ cardId, columnId: targetColumnId }, { onSuccess: () => onOpenChange(false) })}
+              className="px-3 py-1.5 text-sm rounded-lg border border-border hover:bg-surface-secondary disabled:opacity-50"
+            >移动到此</button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
@@ -424,7 +646,8 @@ export default function BoardView() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [newColumnName, setNewColumnName] = useState('')
-  const [archivePanelOpen, setArchivePanelOpen] = useState(false)
+  const [boardMenuOpen, setBoardMenuOpen] = useState(false)
+  const [copyMoveCardId, setCopyMoveCardId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const cardDetailId = useBoardStore(s => s.cardDetailId)
   const setCardDetailId = useBoardStore(s => s.setCardDetailId)
@@ -469,20 +692,20 @@ export default function BoardView() {
     'n': () => { if (newColumnName === undefined) setNewColumnName('') },
     'escape': () => {
       if (cardDetailId) setCardDetailId(null)
-      else if (archivePanelOpen) setArchivePanelOpen(false)
+      else if (boardMenuOpen) setBoardMenuOpen(false)
     },
   })
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" style={board?.background ? { backgroundColor: board.background } : undefined}>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border shrink-0 bg-surface/80 backdrop-blur-sm">
         <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg hover:bg-surface-secondary text-text-secondary transition-colors"><ArrowLeft size={18} /></button>
         <h1 className="font-bold text-base flex-1">{board?.name ?? '看板'}</h1>
         <button onClick={() => setTagManagerOpen(true)} className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-surface-secondary text-text-secondary transition-colors">
           <TagIcon size={14} /> 标签
         </button>
-        <button onClick={() => setArchivePanelOpen(v => !v)} className={'flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ' + (archivePanelOpen ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-surface-secondary text-text-secondary')}>
-          {archivePanelOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />} 归档
+        <button onClick={() => setBoardMenuOpen(v => !v)} className={'flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ' + (boardMenuOpen ? 'bg-primary/10 border-primary text-primary' : 'border-border hover:bg-surface-secondary text-text-secondary')}>
+          <PanelRightOpen size={14} /> 菜单
         </button>
       </div>
 
@@ -499,6 +722,7 @@ export default function BoardView() {
                 onEditCard={setCardDetailId}
                 onDeleteCard={() => queryClient.invalidateQueries({ queryKey: ['cards'] })}
                 onArchiveCard={() => queryClient.invalidateQueries({ queryKey: ['cards'] })}
+                onCopyCard={setCopyMoveCardId}
                 onDrop={handleDrop}
                 onColumnDrop={handleColumnDrop}
                 boardId={boardId!}
@@ -523,9 +747,11 @@ export default function BoardView() {
         </div>
       )}
 
-      {boardId && <ArchivePanel boardId={boardId} open={archivePanelOpen} onClose={() => setArchivePanelOpen(false)} />}
+      {boardId && <BoardMenuPanel boardId={boardId} open={boardMenuOpen} onClose={() => setBoardMenuOpen(false)} />}
 
-      <CardDetailDialog key={cardDetailId} cardId={cardDetailId} open={!!cardDetailId} onOpenChange={open => !open && setCardDetailId(null)} onDeleted={() => queryClient.invalidateQueries({ queryKey: ['cards'] })} boardId={boardId} />
+      {boardId && copyMoveCardId && <CopyMoveDialog key={copyMoveCardId} cardId={copyMoveCardId} boardId={boardId} open={!!copyMoveCardId} onOpenChange={open => !open && setCopyMoveCardId(null)} />}
+
+      <CardDetailDialog key={cardDetailId} cardId={cardDetailId} open={!!cardDetailId} onOpenChange={open => !open && setCardDetailId(null)} onDeleted={() => queryClient.invalidateQueries({ queryKey: ['cards'] })} onCopyMove={setCopyMoveCardId} boardId={boardId} />
       <TagManager boardId={boardId!} open={tagManagerOpen} onOpenChange={setTagManagerOpen} />
     </div>
   )

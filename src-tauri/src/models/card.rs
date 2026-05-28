@@ -15,6 +15,10 @@ pub struct Card {
     pub is_archived: i32,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub subtask_done: i32,
+    #[serde(default)]
+    pub subtask_total: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

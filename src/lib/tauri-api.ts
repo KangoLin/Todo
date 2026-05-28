@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { Project, Board, Column, Card, CardDetail, Subtask, Tag, SearchResult, DbStats } from '../types'
+import type { Project, Board, Column, Card, CardDetail, Subtask, Tag, Comment, Activity, SearchResult, DbStats } from '../types'
 
 // Projects
 export const createProject = (name: string, description?: string, color?: string) =>
@@ -16,8 +16,8 @@ export const createBoard = (projectId: string, name: string) =>
 export const getBoardsByProject = (projectId: string) =>
   invoke<Board[]>('get_boards_by_project', { projectId })
 export const getBoard = (id: string) => invoke<Board>('get_board', { id })
-export const updateBoard = (id: string, name?: string) =>
-  invoke<Board>('update_board', { id, name })
+export const updateBoard = (id: string, name?: string, background?: string) =>
+  invoke<Board>('update_board', { id, name, background })
 export const deleteBoard = (id: string) => invoke<void>('delete_board', { id })
 export const reorderBoards = (ids: string[]) => invoke<void>('reorder_boards', { ids })
 
@@ -26,6 +26,8 @@ export const createColumn = (boardId: string, name: string, sortOrder?: number) 
   invoke<Column>('create_column', { boardId, name, sortOrder })
 export const getColumnsByBoard = (boardId: string) =>
   invoke<Column[]>('get_columns_by_board', { boardId })
+export const getColumnsByProject = (projectId: string) =>
+  invoke<Column[]>('get_columns_by_project', { projectId })
 export const updateColumn = (id: string, name?: string, wipLimit?: number) =>
   invoke<Column>('update_column', { id, name, wipLimit })
 export const deleteColumn = (id: string) => invoke<void>('delete_column', { id })
@@ -47,6 +49,15 @@ export const archiveCard = (id: string) => invoke<void>('archive_card', { id })
 export const restoreCard = (id: string) => invoke<void>('restore_card', { id })
 export const getArchivedCardsByBoard = (boardId: string) => invoke<Card[]>('get_archived_cards_by_board', { boardId })
 export const deleteCard = (id: string) => invoke<void>('delete_card', { id })
+export const copyCard = (cardId: string, targetColumnId: string) =>
+  invoke<Card>('copy_card_cmd', { cardId, targetColumnId })
+
+// Comments
+export const createComment = (cardId: string, content: string) =>
+  invoke<Comment>('create_comment', { cardId, content })
+export const getCommentsByCard = (cardId: string) =>
+  invoke<Comment[]>('get_comments_by_card', { cardId })
+export const deleteComment = (id: string) => invoke<void>('delete_comment', { id })
 
 // Subtasks
 export const createSubtask = (cardId: string, title: string) =>
@@ -75,3 +86,7 @@ export const getDbStats = () => invoke<DbStats>('get_db_stats_cmd')
 // Data import/export
 export const exportData = (path: string) => invoke<string>('export_data', { path })
 export const importData = (path: string) => invoke<string>('import_data', { path })
+
+// Activities
+export const getActivitiesByBoard = (boardId: string) =>
+  invoke<Activity[]>('get_activities_by_board', { boardId })

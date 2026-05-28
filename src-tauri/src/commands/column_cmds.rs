@@ -17,6 +17,12 @@ pub fn get_columns_by_board(db: State<Database>, board_id: String) -> Result<Vec
 }
 
 #[tauri::command]
+pub fn get_columns_by_project(db: State<Database>, project_id: String) -> Result<Vec<Column>, String> {
+    let conn = db.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+    columns::get_by_project(&conn, &project_id)
+}
+
+#[tauri::command]
 pub fn update_column(db: State<Database>, id: String, name: Option<String>, wip_limit: Option<i32>) -> Result<Column, String> {
     let conn = db.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
     let req = UpdateColumnRequest { id, name, wip_limit };

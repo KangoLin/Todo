@@ -23,9 +23,9 @@ pub fn get_board(db: State<Database>, id: String) -> Result<Board, String> {
 }
 
 #[tauri::command]
-pub fn update_board(db: State<Database>, id: String, name: Option<String>) -> Result<Board, String> {
+pub fn update_board(db: State<Database>, id: String, name: Option<String>, background: Option<String>) -> Result<Board, String> {
     let conn = db.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
-    let req = UpdateBoardRequest { id, name };
+    let req = UpdateBoardRequest { id, name, background };
     boards::update(&conn, &req)
 }
 

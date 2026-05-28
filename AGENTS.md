@@ -24,7 +24,9 @@ Each time a task is completed, **update `制作计划.md`** — move the item fr
 | `pnpm tauri` | Tauri CLI passthrough |
 
 ## Open tool rule
-当用户说「打开工具」「看看」「打开看看」「运行」等类似表达时，**自动执行 `pnpm dev`** 启动 Vite 开发服务器，然后**在浏览器中打开** `http://localhost:1420/`。不要询问，直接运行。
+当用户说「打开工具」「看看」「打开看看」「运行」等类似表达时，**自动执行 `pnpm tauri dev`** 启动完整应用（编译 Rust + 启动 Vite，弹出原生窗口），然后**在浏览器中打开** `http://localhost:1420/`。不要询问，直接运行。
+
+注意：`pnpm dev` 仅启动前端 Vite 服务器，没有 Rust 后端，所有数据操作（创建项目/看板/卡片等）会因 Tauri `invoke` 调用无后端响应而失败。
 
 ## Architecture
 - **Frontend** (`src/`): routes at `App.tsx` — `/projects`, `/project/:projectId`, `/board/:boardId`, `/search`

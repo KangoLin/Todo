@@ -11,6 +11,7 @@ export function useCreateProject() {
     mutationFn: (params: { name: string; description?: string; color?: string }) =>
       createProject(params.name, params.description, params.color),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    onError: (err: Error) => alert('创建项目失败：' + err.message),
   })
 }
 
@@ -20,6 +21,7 @@ export function useUpdateProject() {
     mutationFn: (params: { id: string; name?: string; description?: string; color?: string }) =>
       updateProject(params.id, params.name, params.description, params.color),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    onError: (err: Error) => alert('更新项目失败：' + err.message),
   })
 }
 
@@ -28,5 +30,6 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: (id: string) => deleteProject(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    onError: (err: Error) => alert('删除项目失败：' + err.message),
   })
 }

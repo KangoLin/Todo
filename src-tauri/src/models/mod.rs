@@ -4,6 +4,8 @@ pub mod column;
 pub mod card;
 pub mod subtask;
 pub mod tag;
+pub mod comment;
+pub mod activity;
 pub mod search_result;
 pub mod export;
 
@@ -13,5 +15,7 @@ pub use column::*;
 pub use card::*;
 pub use subtask::*;
 pub use tag::*;
+pub use comment::*;
+pub use activity::*;
 pub use search_result::*;
 pub use export::*;

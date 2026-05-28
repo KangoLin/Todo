@@ -36,8 +36,12 @@ export function useCreateBoard() {
 export function useUpdateBoard() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (params: { id: string; name: string; projectId: string }) => updateBoard(params.id, params.name),
-    onSuccess: (_data, variables) => qc.invalidateQueries({ queryKey: ['boards', variables.projectId] }),
+    mutationFn: (params: { id: string; name: string; projectId: string; background?: string }) =>
+      updateBoard(params.id, params.name, params.background),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['boards', variables.projectId] })
+      qc.invalidateQueries({ queryKey: ['board', variables.id] })
+    },
   })
 }
 
