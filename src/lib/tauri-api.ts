@@ -44,6 +44,8 @@ export const moveCard = (cardId: string, targetColumnId: string, targetSortOrder
 export const moveCardWithinColumn = (cardId: string, targetSortOrder: number) =>
   invoke<void>('move_card_within_column', { cardId, targetSortOrder })
 export const archiveCard = (id: string) => invoke<void>('archive_card', { id })
+export const restoreCard = (id: string) => invoke<void>('restore_card', { id })
+export const getArchivedCardsByBoard = (boardId: string) => invoke<Card[]>('get_archived_cards_by_board', { boardId })
 export const deleteCard = (id: string) => invoke<void>('delete_card', { id })
 
 // Subtasks

@@ -58,3 +58,15 @@ pub fn delete_card(db: State<Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
     cards::delete(&conn, &id)
 }
+
+#[tauri::command]
+pub fn restore_card(db: State<Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+    cards::restore(&conn, &id)
+}
+
+#[tauri::command]
+pub fn get_archived_cards_by_board(db: State<Database>, board_id: String) -> Result<Vec<Card>, String> {
+    let conn = db.conn.lock().map_err(|e| format!("Lock error: {}", e))?;
+    cards::get_archived_by_board(&conn, &board_id)
+}

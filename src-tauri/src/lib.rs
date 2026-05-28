@@ -66,6 +66,8 @@ pub fn run() {
             commands::card_cmds::move_card,
             commands::card_cmds::move_card_within_column,
             commands::card_cmds::archive_card,
+            commands::card_cmds::restore_card,
+            commands::card_cmds::get_archived_cards_by_board,
             commands::card_cmds::delete_card,
             // Subtasks
             commands::subtask_cmds::create_subtask,

@@ -109,6 +109,41 @@ pub fn archive(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn restore(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE cards SET is_archived = 0, updated_at = datetime('now') WHERE id = ?1",
+        params![id],
+    ).map_err(|e| format!("Failed to restore card: {}", e))?;
+    Ok(())
+}
+
+pub fn get_archived_by_board(conn: &Connection, board_id: &str) -> Result<Vec<Card>, String> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, c.column_id, c.title, c.description, c.sort_order, c.priority, c.due_date, c.cover_color, c.is_archived, c.created_at, c.updated_at \
+         FROM cards c JOIN columns col ON c.column_id = col.id \
+         WHERE col.board_id = ?1 AND c.is_archived = 1 \
+         ORDER BY c.updated_at DESC"
+    ).map_err(|e| format!("Failed to query archived cards: {}", e))?;
+    let cards = stmt.query_map(params![board_id], |row| {
+        Ok(Card {
+            id: row.get(0)?,
+            column_id: row.get(1)?,
+            title: row.get(2)?,
+            description: row.get(3)?,
+            sort_order: row.get(4)?,
+            priority: row.get(5)?,
+            due_date: row.get(6)?,
+            cover_color: row.get(7)?,
+            is_archived: row.get(8)?,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
+        })
+    }).map_err(|e| format!("Failed to map archived cards: {}", e))?
+    .filter_map(|r| r.ok())
+    .collect();
+    Ok(cards)
+}
+
 pub fn delete(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM cards WHERE id = ?1", params![id])
         .map_err(|e| format!("Failed to delete card: {}", e))?;

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getColumnsByBoard, createColumn, updateColumn, deleteColumn } from '../lib/tauri-api'
+import { getColumnsByBoard, createColumn, updateColumn, deleteColumn, reorderColumns } from '../lib/tauri-api'
 
 export function useColumns(boardId: string | undefined) {
   return useQuery({
@@ -31,6 +31,15 @@ export function useDeleteColumn() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (params: { id: string; boardId: string }) => deleteColumn(params.id),
+    onSuccess: (_data, variables) => qc.invalidateQueries({ queryKey: ['columns', variables.boardId] }),
+  })
+}
+
+export function useReorderColumns() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { ids: string[]; boardId: string }) =>
+      reorderColumns(params.ids),
     onSuccess: (_data, variables) => qc.invalidateQueries({ queryKey: ['columns', variables.boardId] }),
   })
 }

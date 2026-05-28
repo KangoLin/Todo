@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { getCardsByColumn, getCard, createCard, updateCard, deleteCard, archiveCard, moveCard, moveCardWithinColumn } from '../lib/tauri-api'
+import { getCardsByColumn, getCard, createCard, updateCard, deleteCard, archiveCard, restoreCard, getArchivedCardsByBoard, moveCard, moveCardWithinColumn } from '../lib/tauri-api'
 
 export function useCards(columnId: string | undefined) {
   return useQuery({
@@ -14,6 +14,14 @@ export function useCardDetail(cardId: string | null) {
     queryKey: ['card', cardId],
     queryFn: () => getCard(cardId!),
     enabled: !!cardId,
+  })
+}
+
+export function useArchivedCards(boardId: string | undefined) {
+  return useQuery({
+    queryKey: ['archived_cards', boardId],
+    queryFn: () => getArchivedCardsByBoard(boardId!),
+    enabled: !!boardId,
   })
 }
 
@@ -40,7 +48,10 @@ export function useDeleteCard() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => deleteCard(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cards'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cards'] })
+      qc.invalidateQueries({ queryKey: ['archived_cards'] })
+    },
   })
 }
 
@@ -48,7 +59,21 @@ export function useArchiveCard() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => archiveCard(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cards'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cards'] })
+      qc.invalidateQueries({ queryKey: ['archived_cards'] })
+    },
+  })
+}
+
+export function useRestoreCard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => restoreCard(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cards'] })
+      qc.invalidateQueries({ queryKey: ['archived_cards'] })
+    },
   })
 }
 
