@@ -16,6 +16,12 @@
 | `pnpm tauri dev` | Tauri dev（编译 Rust + 启动 Vite + 原生窗口） |
 | `pnpm build` | `tsc -b && vite build` |
 | `pnpm lint` | ESLint with flat config |
+| `pnpm tauri` | `pnpm tauri` 子命令入口 |
+
+## GitHub
+- 仓库地址: `https://github.com/KangoLin/Todo.git`
+- 推送前检查 `git status`、`git diff`，只 stage 需要的文件
+- Commit message 用中文，保持项目风格（`feat:` / `fix:` / `chore:` 前缀）
 
 ## Dev rule
 每次改动后 **不要重新打开工具**。Vite HMR 会自动热更新已打开的页面。如果需要刷新，直接刷新浏览器已打开的页面即可。

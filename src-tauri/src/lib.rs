@@ -25,6 +25,7 @@ pub fn run() {
             db::update_item,
             db::delete_item,
             db::reorder_items,
+            db::move_item,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
