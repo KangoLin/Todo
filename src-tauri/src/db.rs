@@ -8,6 +8,7 @@ pub struct Item {
     pub id: String,
     pub card_id: String,
     pub text: String,
+    pub description: String,
     pub start: String,
     pub end: String,
     pub done: bool,
@@ -52,6 +53,7 @@ impl Database {
                 id TEXT PRIMARY KEY,
                 card_id TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
                 text TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
                 start_time TEXT NOT NULL DEFAULT '',
                 end_time TEXT NOT NULL DEFAULT '',
                 done INTEGER NOT NULL DEFAULT 0,
@@ -62,6 +64,7 @@ impl Database {
         conn.execute_batch("ALTER TABLE cards ADD COLUMN date TEXT").ok();
         conn.execute_batch("ALTER TABLE cards ADD COLUMN folded INTEGER NOT NULL DEFAULT 0").ok();
         conn.execute_batch("UPDATE cards SET collapsed = 0, folded = 1 WHERE collapsed = 1 AND folded = 0").ok();
+        conn.execute_batch("ALTER TABLE items ADD COLUMN description TEXT NOT NULL DEFAULT ''").ok();
 
         Ok(())
     }
@@ -92,17 +95,18 @@ pub fn get_cards(db: tauri::State<'_, Database>) -> Result<Vec<Card>, String> {
     drop(card_stmt);
 
     let mut item_stmt = conn.prepare(
-        "SELECT id, card_id, text, start_time, end_time, done FROM items ORDER BY sort_order"
+        "SELECT id, card_id, text, description, start_time, end_time, done FROM items ORDER BY sort_order"
     ).map_err(|e| e.to_string())?;
 
     let items: Vec<Item> = item_stmt.query_map([], |row| {
-        let done_int: i32 = row.get(5)?;
+        let done_int: i32 = row.get(6)?;
         Ok(Item {
             id: row.get(0)?,
             card_id: row.get(1)?,
             text: row.get(2)?,
-            start: row.get(3)?,
-            end: row.get(4)?,
+            description: row.get(3)?,
+            start: row.get(4)?,
+            end: row.get(5)?,
             done: done_int != 0,
         })
     }).map_err(|e| e.to_string())?
@@ -137,7 +141,7 @@ pub fn create_card(db: tauri::State<'_, Database>) -> Result<Card, String> {
 
     let item_id = Uuid::new_v4().to_string();
     conn.execute(
-        "INSERT INTO items (id, card_id, text, start_time, end_time, done, sort_order) VALUES (?1, ?2, '', '', '', 0, 0)",
+        "INSERT INTO items (id, card_id, text, description, start_time, end_time, done, sort_order) VALUES (?1, ?2, '', '', '', '', 0, 0)",
         params![item_id, id],
     ).map_err(|e| e.to_string())?;
 
@@ -151,6 +155,7 @@ pub fn create_card(db: tauri::State<'_, Database>) -> Result<Card, String> {
             id: item_id,
             card_id: id,
             text: String::new(),
+            description: String::new(),
             start: String::new(),
             end: String::new(),
             done: false,
@@ -216,7 +221,7 @@ pub fn reorder_cards(db: tauri::State<'_, Database>, ids: Vec<String>) -> Result
 }
 
 #[tauri::command]
-pub fn create_item(db: tauri::State<'_, Database>, card_id: String, text: Option<String>, start: Option<String>, end: Option<String>, done: Option<bool>) -> Result<Item, String> {
+pub fn create_item(db: tauri::State<'_, Database>, card_id: String, text: Option<String>, description: Option<String>, start: Option<String>, end: Option<String>, done: Option<bool>) -> Result<Item, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let id = Uuid::new_v4().to_string();
 
@@ -227,19 +232,21 @@ pub fn create_item(db: tauri::State<'_, Database>, card_id: String, text: Option
     ).map_err(|e| e.to_string())?;
 
     let text = text.unwrap_or_default();
+    let description = description.unwrap_or_default();
     let start = start.unwrap_or_default();
     let end = end.unwrap_or_default();
     let done = done.unwrap_or(false);
 
     conn.execute(
-        "INSERT INTO items (id, card_id, text, start_time, end_time, done, sort_order) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![id, card_id, text, start, end, done as i32, max_order + 1],
+        "INSERT INTO items (id, card_id, text, description, start_time, end_time, done, sort_order) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![id, card_id, text, description, start, end, done as i32, max_order + 1],
     ).map_err(|e| e.to_string())?;
 
     Ok(Item {
         id,
         card_id,
         text,
+        description,
         start,
         end,
         done,
@@ -257,11 +264,15 @@ pub fn move_item(db: tauri::State<'_, Database>, id: String, target_card_id: Str
 }
 
 #[tauri::command]
-pub fn update_item(db: tauri::State<'_, Database>, id: String, text: Option<String>, start: Option<String>, end: Option<String>, done: Option<bool>) -> Result<(), String> {
+pub fn update_item(db: tauri::State<'_, Database>, id: String, text: Option<String>, description: Option<String>, start: Option<String>, end: Option<String>, done: Option<bool>) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     if let Some(ref t) = text {
         conn.execute("UPDATE items SET text = ?1 WHERE id = ?2", params![t, id])
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(ref desc) = description {
+        conn.execute("UPDATE items SET description = ?1 WHERE id = ?2", params![desc, id])
             .map_err(|e| e.to_string())?;
     }
     if let Some(ref s) = start {

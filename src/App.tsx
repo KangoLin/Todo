@@ -1,10 +1,11 @@
 import { invoke } from '@tauri-apps/api/core'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Clock, X, Trash2, GripVertical, Calendar, Search } from 'lucide-react'
+import { Plus, Clock, X, Trash2, GripVertical, Calendar, Search, Check } from 'lucide-react'
 
 interface Item {
   id: string
   text: string
+  description: string
   start: string
   end: string
   done: boolean
@@ -81,7 +82,9 @@ interface NoteCardProps {
   onDeleteItem: (cardId: string, itemId: string) => void
   onDragItemStart: (cardId: string, idx: number) => void
   onDragItemOver: (cardId: string, idx: number) => void
+  onDropItem: (cardId: string, idx: number) => void
   onDragItemEnd: () => void
+  onOpenItem: (cardId: string, itemId: string) => void
   onCardDragStart: (id: string) => void
   onCardDragOver: (e: React.DragEvent, id: string) => void
   onCardDragEnd: () => void
@@ -98,7 +101,9 @@ function NoteCard({
   onDeleteItem,
   onDragItemStart,
   onDragItemOver,
+  onDropItem,
   onDragItemEnd,
+  onOpenItem,
   onCardDragStart,
   onCardDragOver,
   onCardDragEnd,
@@ -147,36 +152,55 @@ function NoteCard({
               e.preventDefault()
               onDragItemOver(card.id, card.items.length)
             }
-          }}>
+          }}
+          onDrop={(e) => { e.preventDefault(); onDropItem(card.id, card.items.length) }}>
           {card.items.map((item, i) => (
             <div key={item.id} draggable
               onDragStart={() => onDragItemStart(card.id, i)}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragItemOver(card.id, i) }}
+              onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropItem(card.id, i) }}
               onDragEnd={onDragItemEnd}
-              className={'border transition-colors overflow-hidden ' + (item.done ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-gray-50 hover:border-[#6366f1]/30')}>
+              onClick={() => onOpenItem(card.id, item.id)}
+              className={'border transition-colors overflow-hidden cursor-pointer ' + 
+                (item.done 
+                  ? 'border-green-300 bg-green-50' 
+                  : 'border-gray-200 bg-gray-50')}>
               <div className="flex items-center gap-1 px-2.5 py-1 border-b border-inherit/60">
-                <span className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0">
+                <span onClick={e => e.stopPropagation()} className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing shrink-0">
                   <GripVertical size={12} />
                 </span>
-                <button onClick={() => onUpdateItem(card.id, item.id, 'done', !item.done)}
+                <button onClick={e => { e.stopPropagation(); onUpdateItem(card.id, item.id, 'done', !item.done) }}
                   className={'w-4 h-4 border shrink-0 flex items-center justify-center transition-colors ' + (item.done ? 'bg-green-500 border-green-500' : 'border-gray-300 hover:border-[#6366f1]')}>
                   {item.done && <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="3"><path d="M2 6l3 3 5-5" /></svg>}
                 </button>
                 <Clock size={11} className="text-gray-300 shrink-0" />
-                <TimePicker value={item.start} onChange={v => onUpdateItem(card.id, item.id, 'start', v)} />
+                <div onClick={e => e.stopPropagation()}>
+                  <TimePicker value={item.start} onChange={v => onUpdateItem(card.id, item.id, 'start', v)} />
+                </div>
                 <span className="text-gray-300">—</span>
-                <TimePicker value={item.end} onChange={v => onUpdateItem(card.id, item.id, 'end', v)} />
+                <div onClick={e => e.stopPropagation()}>
+                  <TimePicker value={item.end} onChange={v => onUpdateItem(card.id, item.id, 'end', v)} />
+                </div>
                 {calcMinutes(item.start, item.end) > 0 && (
                   <span className="text-xs text-gray-400 ml-auto">{formatDuration(calcMinutes(item.start, item.end))}</span>
                 )}
-                <button onClick={() => onDeleteItem(card.id, item.id)} className="text-gray-300 hover:text-red-500 transition-colors shrink-0 ml-0.5"><X size={13} /></button>
+                <button onClick={e => { e.stopPropagation(); onDeleteItem(card.id, item.id) }} className="text-gray-300 hover:text-red-500 transition-colors shrink-0 ml-0.5"><X size={13} /></button>
               </div>
-              <input
-                value={item.text}
-                onChange={e => onUpdateItem(card.id, item.id, 'text', e.target.value)}
-                placeholder="新增事项..."
-                className={'w-full px-2.5 py-2 text-sm bg-transparent border-none outline-none ' + (item.done ? 'line-through text-gray-400' : '')}
-              />
+              <div className="flex items-center gap-2 px-2.5 py-1.5">
+                <input
+                  value={item.text}
+                  onClick={e => e.stopPropagation()}
+                  onChange={e => onUpdateItem(card.id, item.id, 'text', e.target.value)}
+                  placeholder="新增事项..."
+                  className={'flex-1 text-sm bg-transparent border-none outline-none ' + (item.done ? 'line-through text-gray-400' : '')}
+                />
+              </div>
+              <div className={'px-2.5 pb-2 -mt-0.5 text-xs leading-snug line-clamp-2 ' + 
+                (item.description 
+                  ? 'text-gray-500' 
+                  : 'text-gray-300 italic')}>
+                {item.description || '点击添加详细描述...'}
+              </div>
             </div>
           ))}
           <button onClick={() => onAddItem(card.id)}
@@ -194,9 +218,81 @@ function NoteCard({
   )
 }
 
+function TaskDetailModal({ card, item, onClose, onUpdate, onDelete }: {
+  card: Card
+  item: Item
+  onClose: () => void
+  onUpdate: (cardId: string, itemId: string, field: keyof Item, value: string | boolean) => void
+  onDelete: (cardId: string, itemId: string) => void
+}) {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-gray-500 flex items-center gap-1.5">
+            <Calendar size={12} />
+            <span>{card.date || '未设置日期'}</span>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" title="关闭">
+            <X size={20} />
+          </button>
+        </div>
+
+        <input
+          value={item.text}
+          onChange={e => onUpdate(card.id, item.id, 'text', e.target.value)}
+          placeholder="标题"
+          className={'w-full text-2xl font-bold bg-transparent border-none outline-none mb-4 px-0 ' + (item.done ? 'line-through text-gray-400' : 'text-gray-800')}
+          autoFocus
+        />
+
+        <div className="flex items-center gap-3 mb-6 py-2 px-3 bg-gray-50 rounded">
+          <button onClick={() => onUpdate(card.id, item.id, 'done', !item.done)}
+            className={'w-5 h-5 border-2 shrink-0 flex items-center justify-center transition-colors ' + (item.done ? 'bg-green-500 border-green-500' : 'border-gray-300 hover:border-[#6366f1]')}>
+            {item.done && <Check size={12} className="text-white" strokeWidth={3} />}
+          </button>
+          <Clock size={14} className="text-gray-400 shrink-0" />
+          <TimePicker value={item.start} onChange={v => onUpdate(card.id, item.id, 'start', v)} />
+          <span className="text-gray-400">—</span>
+          <TimePicker value={item.end} onChange={v => onUpdate(card.id, item.id, 'end', v)} />
+          {calcMinutes(item.start, item.end) > 0 && (
+            <span className="text-xs text-[#6366f1] font-medium ml-auto">{formatDuration(calcMinutes(item.start, item.end))}</span>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <div className="text-xs font-semibold text-gray-500 mb-2">描述</div>
+          <textarea
+            value={item.description}
+            onChange={e => onUpdate(card.id, item.id, 'description', e.target.value)}
+            placeholder="添加详细描述..."
+            className="w-full min-h-[140px] text-sm bg-gray-50 border border-gray-200 rounded p-3 outline-none focus:border-[#6366f1] focus:bg-white transition-colors resize-y leading-relaxed"
+          />
+        </div>
+
+        <div className="flex justify-end pt-4 border-t border-gray-200">
+          <button onClick={() => { onDelete(card.id, item.id); onClose() }}
+            className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1.5 transition-colors">
+            <Trash2 size={14} /> 删除任务
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [cards, setCards] = useState<Card[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [openItem, setOpenItem] = useState<{ cardId: string; itemId: string } | null>(null)
   const dragCardIdx = useRef<string | null>(null)
   const cardsRef = useRef(cards)
   cardsRef.current = cards
@@ -215,6 +311,13 @@ export default function App() {
     loadCards()
   }, [])
 
+  useEffect(() => {
+    if (!openItem) return
+    const card = cards.find(c => c.id === openItem.cardId)
+    const item = card?.items.find(i => i.id === openItem.itemId)
+    if (!card || !item) setOpenItem(null)
+  }, [cards, openItem])
+
   const loadCards = async () => {
     try {
       let data = await invoke<Card[]>('get_cards')
@@ -225,7 +328,7 @@ export default function App() {
     } catch {
       const id = genId()
       const itemId = genId()
-      setCards([{ id, title: '', date: null, items: [{ id: itemId, text: '', start: '', end: '', done: false }] }])
+      setCards([{ id, title: '', date: null, items: [{ id: itemId, text: '', description: '', start: '', end: '', done: false }] }])
     }
   }
 
@@ -246,7 +349,7 @@ export default function App() {
     } catch {
       const id = genId()
       const itemId = genId()
-      setCards(prev => [...prev, { id, title: '', date: null, items: [{ id: itemId, text: '', start: '', end: '', done: false }] }])
+      setCards(prev => [...prev, { id, title: '', date: null, items: [{ id: itemId, text: '', description: '', start: '', end: '', done: false }] }])
     }
   }
 
@@ -260,7 +363,7 @@ export default function App() {
       const item = await invoke<Item>('create_item', { cardId })
       setCards(prev => prev.map(c => c.id === cardId ? { ...c, items: [...c.items, item] } : c))
     } catch {
-      const item: Item = { id: genId(), text: '', start: '', end: '', done: false }
+      const item: Item = { id: genId(), text: '', description: '', start: '', end: '', done: false }
       setCards(prev => prev.map(c => c.id === cardId ? { ...c, items: [...c.items, item] } : c))
     }
   }
@@ -273,6 +376,10 @@ export default function App() {
     const payload: Record<string, unknown> = { id: itemId }
     payload[field] = value
     try { await invoke('update_item', payload) } catch {}
+  }
+
+  const handleOpenItem = (cardId: string, itemId: string) => {
+    setOpenItem({ cardId, itemId })
   }
 
   const handleDeleteItem = async (cardId: string, itemId: string) => {
@@ -299,57 +406,56 @@ export default function App() {
   const handleDragItemOver = useCallback((cardId: string, targetIdx: number) => {
     if (!dragItemInfo.current) return
     const info = dragItemInfo.current
-
     if (info.srcCardId === cardId) {
+      const items = cardsRef.current.find(c => c.id === cardId)?.items
+      if (!items || targetIdx > items.length) return
       info.targetCardId = null
       info.targetIdx = null
-      if (targetIdx >= (cardsRef.current.find(c => c.id === cardId)?.items.length ?? 0)) return
-      setCards(prev => {
-        const next = prev.map(c => ({ ...c, items: [...c.items] }))
-        const card = next.find(c => c.id === cardId)
-        if (!card || info.srcIdx < 0 || info.srcIdx >= card.items.length) return prev
-        const [moved] = card.items.splice(info.srcIdx, 1)
-        card.items.splice(targetIdx, 0, moved)
-        info.srcIdx = targetIdx
-        return next
-      })
     } else {
       info.targetCardId = cardId
       info.targetIdx = targetIdx
     }
   }, [])
 
-  const handleDragItemEnd = useCallback(async () => {
+  const handleDropItem = useCallback((dropCardId: string, dropIdx: number) => {
     if (!dragItemInfo.current) return
     const info = dragItemInfo.current
     setDraggingTask(false)
+    dragItemInfo.current = null
 
-    if (info.targetCardId && info.targetCardId !== info.srcCardId) {
+    if (dropCardId === info.srcCardId) {
+      let ids: string[] = []
+      setCards(prev => {
+        const next = prev.map(c => ({ ...c, items: [...c.items] }))
+        const card = next.find(c => c.id === dropCardId)
+        if (!card || info.srcIdx < 0 || info.srcIdx >= card.items.length) return prev
+        const insertIdx = info.srcIdx < dropIdx ? dropIdx - 1 : dropIdx
+        const [moved] = card.items.splice(info.srcIdx, 1)
+        card.items.splice(insertIdx, 0, moved)
+        ids = card.items.map(i => i.id)
+        return next
+      })
+      invoke('reorder_items', { ids }).catch(() => {})
+    } else {
       let tgtIds: string[] = []
       setCards(prev => {
         const next = prev.map(c => ({ ...c, items: [...c.items] }))
         const srcCard = next.find(c => c.id === info.srcCardId)
-        const tgtCard = next.find(c => c.id === info.targetCardId!)
+        const tgtCard = next.find(c => c.id === dropCardId)
         if (!srcCard || !tgtCard) return prev
         srcCard.items.splice(info.srcIdx, 1)
-        tgtCard.items.splice(info.targetIdx!, 0, { ...info.item })
+        tgtCard.items.splice(dropIdx, 0, { ...info.item })
         tgtIds = tgtCard.items.map(i => i.id)
         return next
       })
-      try {
-        await invoke('move_item', { id: info.item.id, targetCardId: info.targetCardId })
-        await invoke('reorder_items', { ids: tgtIds })
-      } catch {}
-    } else {
-      let ids: string[] = []
-      setCards(prev => {
-        const card = prev.find(c => c.id === info.srcCardId)
-        if (card) ids = card.items.map(i => i.id)
-        return prev
-      })
-      try { await invoke('reorder_items', { ids }) } catch {}
+      invoke('move_item', { id: info.item.id, targetCardId: dropCardId }).catch(() => {})
+      invoke('reorder_items', { ids: tgtIds }).catch(() => {})
     }
+  }, [])
 
+  const handleDragItemEnd = useCallback(() => {
+    if (!dragItemInfo.current) return
+    setDraggingTask(false)
     dragItemInfo.current = null
   }, [])
 
@@ -417,7 +523,9 @@ export default function App() {
             onDeleteItem={handleDeleteItem}
             onDragItemStart={handleDragItemStart}
             onDragItemOver={handleDragItemOver}
+            onDropItem={handleDropItem}
             onDragItemEnd={handleDragItemEnd}
+            onOpenItem={handleOpenItem}
             onCardDragStart={handleCardDragStart}
             onCardDragOver={handleCardDragOver}
             onCardDragEnd={handleCardDragEnd}
@@ -429,6 +537,13 @@ export default function App() {
           <Plus size={16} /> 添加便签
         </button>
       </div>
+      {openItem && (() => {
+        const card = cards.find(c => c.id === openItem.cardId)
+        const item = card?.items.find(i => i.id === openItem.itemId)
+        if (!card || !item) return null
+        return <TaskDetailModal card={card} item={item} onClose={() => setOpenItem(null)}
+          onUpdate={handleUpdateItem} onDelete={handleDeleteItem} />
+      })()}
     </div>
   )
 }
