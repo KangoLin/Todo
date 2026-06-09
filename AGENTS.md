@@ -26,5 +26,8 @@
 ## Dev rule
 每次改动后 **不要重新打开工具**。Vite HMR 会自动热更新已打开的页面。如果需要刷新，直接刷新浏览器已打开的页面即可。
 
+## Taste-skill rule
+所有 UI 必须遵循 `.agents/skills/design-taste-frontend/SKILL.md`（tasteskill）的设计原则。每次新增或修改 UI 前，先加载该 skill，确保设计符合其规范（材质、色彩、阴影、圆角、交互状态等）。
+
 ## Open tool rule
 当用户说「打开工具」「看看」「打开看看」「运行」等类似表达时，启动 Vite dev server 并在浏览器中打开 `http://localhost:1420/`。

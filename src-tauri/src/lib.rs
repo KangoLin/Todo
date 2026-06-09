@@ -26,6 +26,10 @@ pub fn run() {
             db::delete_item,
             db::reorder_items,
             db::move_item,
+            db::export_data,
+            db::import_data,
+            db::search_items,
+            db::manual_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
