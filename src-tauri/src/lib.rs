@@ -16,6 +16,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            db::get_projects,
+            db::create_project,
+            db::update_project,
+            db::delete_project,
+            db::reorder_projects,
             db::get_cards,
             db::create_card,
             db::update_card,
@@ -24,11 +29,16 @@ pub fn run() {
             db::create_item,
             db::update_item,
             db::delete_item,
+            db::create_repeat_item,
             db::reorder_items,
             db::move_item,
             db::export_data,
             db::import_data,
             db::search_items,
+            db::create_repeat_item,
+            db::get_statistics,
+            db::log_pomodoro,
+            db::get_pomodoro_stats,
             db::manual_backup,
         ])
         .run(tauri::generate_context!())

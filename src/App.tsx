@@ -541,17 +541,17 @@ function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem, onUpdateItem }
   const HOUR_HEIGHT = 54
 
   return (
-    <div className="relative" style={{ height: (maxHour - minHour) * HOUR_HEIGHT + 30 + 'px' }}>
-      <div className="absolute left-0 right-0 top-[15px] bottom-0">
+    <div className="relative" style={{ height: (maxHour - minHour) * HOUR_HEIGHT + 36 + 'px' }}>
+      <div className="absolute left-0 right-0 top-[18px] bottom-0">
         {Array.from({ length: maxHour - minHour }, (_, i) => {
           const hour = minHour + i
           return (
             <div key={hour} className="absolute left-0 right-0"
               style={{ top: i * HOUR_HEIGHT + 'px', height: HOUR_HEIGHT + 'px' }}>
-              <div className="absolute inset-0 border-t border-[var(--border-divider)]/20" />
+              <div className="absolute inset-0 border-t border-[var(--border-divider)]/14" />
               <div className="absolute left-0 right-0 border-t border-dashed border-[var(--border-divider)]/8"
                 style={{ top: '50%' }} />
-              <span className="absolute -top-3 left-0 text-[11px] text-stone-400 dark:text-stone-500 w-10 text-right font-mono tabular-nums">
+              <span className="absolute -top-[9px] left-0 w-10 text-right text-xs text-stone-400 dark:text-stone-500 font-mono tabular-nums select-none">
                 {String(hour).padStart(2, '0')}
               </span>
             </div>
@@ -561,15 +561,15 @@ function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem, onUpdateItem }
 
       {showNow && nowMin >= minHour * 60 && nowMin <= maxHour * 60 && (
         <div className="absolute left-0 right-0 z-10 pointer-events-none"
-          style={{ top: ((nowMin - minHour * 60) * HOUR_HEIGHT / 60) + 15 + 'px' }}>
-          <div className="flex items-center gap-1 ml-[42px]">
+          style={{ top: ((nowMin - minHour * 60) * HOUR_HEIGHT / 60) + 18 + 'px' }}>
+          <div className="flex items-center gap-1 ml-[44px]">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
-            <span className="h-px flex-1 bg-[var(--accent)]/40" />
+            <span className="h-px flex-1 bg-[var(--accent)]/25" />
           </div>
         </div>
       )}
 
-      <div className="absolute left-[42px] right-0 top-[15px]" style={{ bottom: 0 }}>
+      <div className="absolute left-[44px] right-0 top-[18px]" style={{ bottom: 0 }}>
         {items.map((item, _, all) => {
           const topPx = (item.startMin - minHour * 60) * HOUR_HEIGHT / 60
           const heightPx = Math.max(item.endMin - item.startMin, 18) * HOUR_HEIGHT / 60
@@ -596,25 +596,20 @@ function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem, onUpdateItem }
                 left: `calc(${col} * (${w} + ${gap}px))`,
                 width: w,
               }}>
-              <div className="h-full rounded-lg bg-[var(--bg-surface)]/50 dark:bg-[var(--bg-card-start)]/60 hover:bg-[var(--bg-surface)] dark:hover:bg-[var(--bg-surface)] transition-colors duration-150 overflow-hidden"
-                style={{ borderLeft: `3px solid ${item.color}`, paddingLeft: 0 }}>
-                <div className="flex items-start gap-1.5 px-2.5 py-1 h-full" style={{ marginLeft: '6px' }}>
-                  <span className="w-1 h-1 rounded-full mt-1.5 shrink-0 opacity-60" style={{ backgroundColor: item.color }} />
-                  <div className="min-w-0 flex-1 flex flex-col gap-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-[13px] font-medium text-stone-700 dark:text-stone-300 leading-snug truncate">
-                        {item.text || item.cardTitle || '无标题'}
-                      </span>
-                      {item.cardTitle && (
-                        <span className="text-[10px] text-stone-400 dark:text-stone-500 shrink-0 hidden sm:inline">{item.cardTitle}</span>
-                      )}
-                    </div>
-                    <span className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                      <TimePicker compact value={item.start} onChange={v => onUpdateItem(item.cardId, item.id, 'start', v)} />
-                      <span className="text-stone-400 dark:text-stone-500 text-[9px]">–</span>
-                      <TimePicker compact value={item.end} onChange={v => onUpdateItem(item.cardId, item.id, 'end', v)} />
-                    </span>
-                  </div>
+              <div className="h-full rounded-lg border border-[var(--border-item)]/12 hover:border-[var(--border-item)]/30 hover:bg-[var(--bg-surface)]/15 transition-colors duration-150 overflow-hidden"
+                style={{ borderLeft: `3px solid ${item.color}` }}>
+                <div className="flex flex-col justify-center h-full px-3 gap-0" style={{ marginLeft: '6px' }}>
+                  <span className="text-sm font-medium text-stone-700 dark:text-stone-200 leading-tight truncate">
+                    {item.text || item.cardTitle || '无标题'}
+                  </span>
+                  <span className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                    <TimePicker compact value={item.start} onChange={v => onUpdateItem(item.cardId, item.id, 'start', v)} />
+                    <span className="text-stone-400 dark:text-stone-500 text-[9px]">–</span>
+                    <TimePicker compact value={item.end} onChange={v => onUpdateItem(item.cardId, item.id, 'end', v)} />
+                    {item.cardTitle && (
+                      <span className="text-[10px] text-stone-400 dark:text-stone-500 ml-1">· {item.cardTitle}</span>
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
@@ -655,9 +650,10 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
 
   if (!cards.length) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-stone-400 dark:text-stone-500 gap-2">
-        <Calendar size={32} strokeWidth={1} className="opacity-40" />
-        <p className="text-sm">暂无事项，先添加一些吧</p>
+      <div className="flex flex-col items-center justify-center h-full text-stone-400 dark:text-stone-500 gap-1.5">
+        <Calendar size={28} strokeWidth={1} className="opacity-30" />
+        <p className="text-sm">暂无事项</p>
+        <p className="text-xs text-stone-300 dark:text-stone-600">在上方输入框添加新待办</p>
       </div>
     )
   }
@@ -683,7 +679,7 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto pr-2">
-        <div className="space-y-5">
+        <div className="space-y-4">
           {sortedDates.map(dateKey => {
             const hasTimed = timedByDate[dateKey]?.length > 0
             const hasNoTime = noTimeByDate[dateKey]?.length > 0
@@ -692,14 +688,15 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
             return (
               <div key={dateKey}>
                 <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent)]/30 shrink-0" />
                   <button onClick={() => onTimelineAddItem(dateKey)}
-                    className="shrink-0 w-4 h-4 rounded-full bg-stone-200 dark:bg-stone-700 hover:bg-[var(--accent)] hover:text-white text-stone-500 dark:text-stone-400 flex items-center justify-center transition-all active:scale-[0.9]">
-                    <Plus size={10} strokeWidth={2.5} />
+                    className="shrink-0 w-5 h-5 rounded-full border border-dashed border-[var(--border-divider)]/30 hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/5 text-stone-400 hover:text-[var(--accent)] flex items-center justify-center transition-all active:scale-[0.9]">
+                    <Plus size={12} strokeWidth={2} />
                   </button>
-                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 tracking-wide uppercase">
+                  <span className="text-xs font-medium text-stone-500 dark:text-stone-400 tracking-wide">
                     {dateKey ? formatDateLabel(dateKey) : '未设定日期'}
                   </span>
-                  <div className="flex-1 border-t border-[var(--border-divider)]/15" />
+                  <div className="flex-1 border-t border-[var(--border-divider)]/10" />
                 </div>
 
                 {hasTimed && (() => {
@@ -724,10 +721,10 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
                   <div className={hasTimed ? 'mt-2 space-y-0.5' : 'space-y-0.5'}>
                     {noTimeByDate[dateKey].map(it => (
                       <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
-                        className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)] transition-colors active:scale-[0.98] text-stone-600 dark:text-stone-400">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0 opacity-60" style={{ backgroundColor: it.color }} />
-                        <span className="truncate">{it.text || it.cardTitle || '无标题'}</span>
-                        {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 ml-auto text-[10px]">{it.cardTitle}</span>}
+                        className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)]/20 border-b border-[var(--border-divider)]/8 transition-colors active:scale-[0.98]"
+                        style={{ borderLeft: `2px solid ${it.color}`, paddingLeft: '10px' }}>
+                        <span className="truncate flex-1 text-stone-600 dark:text-stone-400">{it.text || it.cardTitle || '无标题'}</span>
+                        {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 text-[10px]">{it.cardTitle}</span>}
                       </button>
                     ))}
                   </div>
@@ -740,9 +737,10 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
             const k = d || ''
             return timedByDate[k]?.length > 0 || noTimeByDate[k]?.length > 0
           }).length && (
-            <div className="flex flex-col items-center justify-center h-40 text-stone-400 dark:text-stone-500 gap-2">
-              <Clock size={24} strokeWidth={1} className="opacity-40" />
+            <div className="flex flex-col items-center justify-center h-40 text-stone-400 dark:text-stone-500 gap-1.5">
+              <Clock size={22} strokeWidth={1} className="opacity-30" />
               <p className="text-xs">当前日期范围内暂无事项</p>
+              <p className="text-[10px] text-stone-300 dark:text-stone-600">点击日期旁的 + 添加事项</p>
             </div>
           )}
         </div>
