@@ -190,11 +190,11 @@ function NoteCard({
               onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropItem(card.id, i) }}
               onDragEnd={onDragItemEnd}
               onClick={() => onOpenItem(card.id, item.id)}
-              className={'border rounded-lg transition-all duration-200 overflow-hidden cursor-pointer hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgb(var(--shadow-rgb)/var(--shadow-hover-opacity))] active:scale-[0.98] ' +
+              className={'border rounded-lg transition-all duration-200 cursor-pointer hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgb(var(--shadow-rgb)/var(--shadow-hover-opacity))] active:scale-[0.98] ' +
                 (item.done
                   ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 border-l-[3px] border-l-rose-300'
                   : 'border-[var(--border-item)] bg-transparent hover:bg-[var(--bg-surface-hover)] border-l-[3px] border-l-transparent hover:border-l-[var(--accent)]')}>
-              <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[var(--border-divider)]/50 bg-[var(--bg-surface)]">
+              <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[var(--border-divider)]/50 bg-[var(--bg-surface)] rounded-t-lg">
                 <span onClick={e => e.stopPropagation()} className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-700/40 cursor-grab active:cursor-grabbing shrink-0 rounded p-1">
                   <GripVertical size={11} />
                 </span>
