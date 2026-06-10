@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Clock, X, Trash2, GripVertical, Calendar, Search, Check, ChevronDown, Moon, Sun, Download, Upload, LayoutGrid, CalendarDays } from 'lucide-react'
+import { Plus, Clock, X, Trash2, GripVertical, Calendar, Search, Check, ChevronDown, Moon, Sun, Download, Upload, LayoutGrid, CalendarDays, FolderKanban, Edit3, CheckCheck, BarChart3, Timer, Play, Pause, RotateCcw } from 'lucide-react'
 import DescriptionEditor from './components/DescriptionEditor'
 
 interface Tag {
@@ -24,6 +24,7 @@ interface Item {
   priority: string
   tags: Tag[]
   subtasks: Subtask[]
+  repeat: string
 }
 
 interface Card {
@@ -31,6 +32,13 @@ interface Card {
   title: string
   date: string | null
   items: Item[]
+}
+
+interface Project {
+  id: string
+  name: string
+  color: string
+  sort_order: number
 }
 
 function calcMinutes(start: string, end: string): number {
@@ -259,13 +267,24 @@ function NoteCard({
             </div>
           ))}
           <button onClick={() => onAddItem(card.id)}
-            className="group flex items-center justify-center gap-1 w-full py-2 text-xs text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-white/60 dark:hover:bg-[var(--bg-surface-hover)] transition-all border border-dashed border-[var(--border-dashed)] rounded-lg active:scale-[0.98]">
-            <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300" /> 添加
+            className="group flex items-center justify-center gap-1.5 w-full py-2 text-xs text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-white/60 dark:hover:bg-[var(--bg-surface-hover)] transition-all border border-dashed border-[var(--border-dashed)] rounded-lg active:scale-[0.97]">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-stone-100 dark:bg-stone-700/50 group-hover:bg-[var(--accent)]/10 group-hover:text-[var(--accent)] transition-all">
+              <Plus size={12} className="group-hover:rotate-90 transition-transform duration-300" />
+            </span>
+            添加任务
           </button>
           <div ref={bottomRef} />
         </div>
-        <div className="bg-[var(--bg-surface)] rounded-lg px-3 py-2 -mx-1 mt-1 text-xs shrink-0">
-          <div className="text-stone-500 dark:text-stone-400">{card.title || '无标题'} · <span className={doneCount === card.items.length && card.items.length > 0 ? 'text-[var(--accent)] font-medium' : ''}>{doneCount}/{card.items.length}</span> 项完成</div>
+        <div className="bg-[var(--bg-surface)] rounded-lg px-3 py-2 -mx-1 mt-1 text-xs shrink-0 space-y-1">
+          <div className="text-stone-500 dark:text-stone-400 flex items-center justify-between">
+            <span>{card.title || '无标题'}</span>
+            <span className={'tabular-nums ' + (doneCount === card.items.length && card.items.length > 0 ? 'text-[var(--accent)] font-semibold' : 'text-stone-400 dark:text-stone-500')}>{doneCount}/{card.items.length}</span>
+          </div>
+          {card.items.length > 0 && (
+            <div className="h-1 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+              <div className="h-full bg-[var(--accent)]/60 rounded-full transition-all duration-500" style={{ width: (doneCount / card.items.length * 100) + '%' }} />
+            </div>
+          )}
         </div>
           </div>
         </div>
@@ -379,6 +398,27 @@ function TaskDetailModal({ card, item, onClose, onUpdate, onDelete }: {
                       )
                 )}>
                 {p === 'none' ? '无' : p.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <div className="text-xs font-semibold text-stone-500 dark:text-stone-400 mb-2">重复</div>
+          <div className="flex gap-1.5">
+            {[
+              { value: 'none', label: '不重复' },
+              { value: 'daily', label: '每天' },
+              { value: 'weekdays', label: '工作日' },
+              { value: 'weekly', label: '每周' },
+            ].map(r => (
+              <button key={r.value} onClick={() => onUpdate(card.id, item.id, 'repeat', r.value)}
+                className={'text-xs font-semibold px-3 py-1 rounded-lg transition-all active:scale-[0.95] ' + (
+                  item.repeat === r.value
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-transparent border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+                )}>
+                {r.label}
               </button>
             ))}
           </div>
@@ -549,7 +589,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
 
             {nowMin >= minHour * 60 && nowMin <= maxHour * 60 && (
               <div className="absolute left-0 right-0 z-10 pointer-events-none"
-                style={{ top: ((nowMin - minHour * 60) / HOUR_HEIGHT) + 15 + 'px' }}>
+                style={{ top: ((nowMin - minHour * 60) * HOUR_HEIGHT / 60) + 15 + 'px' }}>
                 <div className="flex items-center gap-1 ml-9">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
                   <span className="h-px flex-1 bg-[var(--accent)]/40" />
@@ -559,8 +599,8 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
 
             <div className="absolute left-9 right-0 top-[15px]" style={{ bottom: 0 }}>
               {items.map((item, _, all) => {
-                const topPx = (item.startMin - minHour * 60) / HOUR_HEIGHT
-                const heightPx = Math.max(item.endMin - item.startMin, 18) / HOUR_HEIGHT
+                const topPx = (item.startMin - minHour * 60) * HOUR_HEIGHT / 60
+                const heightPx = Math.max(item.endMin - item.startMin, 18) * HOUR_HEIGHT / 60
                 const overlaps = all.filter(o =>
                   o.id !== item.id && o.startMin < item.endMin && o.endMin > item.startMin
                 )
@@ -630,6 +670,8 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
   )
 }
 
+const PROJECT_COLORS = ['#3d7ae0', '#e03e3e', '#e07a3e', '#e0b03e', '#3eb07a', '#6a3ee0', '#e03e7a', '#7a8e9a']
+
 export default function App() {
   const [cards, setCards] = useState<Card[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -647,6 +689,17 @@ export default function App() {
   const [draggingTask, setDraggingTask] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const importRef = useRef<HTMLInputElement>(null)
+
+  const [projects, setProjects] = useState<Project[]>([])
+  const [currentProjectId, setCurrentProjectId] = useState<string>('')
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [renamingProject, setRenamingProject] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0])
+  const [showStats, setShowStats] = useState(false)
+  const [showPomodoro, setShowPomodoro] = useState(false)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -689,8 +742,13 @@ export default function App() {
   } | null>(null)
 
   useEffect(() => {
-    loadCards()
+    loadProjects()
   }, [])
+
+  useEffect(() => {
+    if (!currentProjectId) return
+    loadCards(currentProjectId)
+  }, [currentProjectId])
 
   useEffect(() => {
     if (!openItem) return
@@ -699,17 +757,36 @@ export default function App() {
     if (!card || !item) setOpenItem(null)
   }, [cards, openItem])
 
-  const loadCards = async () => {
+  const loadProjects = async () => {
     try {
-      let data = await invoke<Card[]>('get_cards')
+      const data = await invoke<Project[]>('get_projects')
+      setProjects(data)
+      if (data.length > 0) {
+        const saved = localStorage.getItem('currentProjectId')
+        if (saved && data.some(p => p.id === saved)) {
+          setCurrentProjectId(saved)
+        } else {
+          setCurrentProjectId(data[0].id)
+        }
+      }
+    } catch {
+      const fallback: Project = { id: 'default', name: '默认项目', color: '#3d7ae0', sort_order: 0 }
+      setProjects([fallback])
+      setCurrentProjectId('default')
+    }
+  }
+
+  const loadCards = async (projectId: string) => {
+    try {
+      let data = await invoke<Card[]>('get_cards', { projectId })
       if (data.length === 0) {
-        data = [await invoke<Card>('create_card')]
+        data = [await invoke<Card>('create_card', { projectId })]
       }
       setCards(data)
     } catch {
       const id = genId()
       const itemId = genId()
-      setCards([{ id, title: '', date: null, items: [{ id: itemId, text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [] }] }])
+      setCards([{ id, title: '', date: null, items: [{ id: itemId, text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [], repeat: 'none' }] }])
     }
   }
 
@@ -725,12 +802,12 @@ export default function App() {
 
   const handleAddCard = async () => {
     try {
-      const card = await invoke<Card>('create_card')
+      const card = await invoke<Card>('create_card', { projectId: currentProjectId })
       setCards(prev => [...prev, card])
     } catch {
       const id = genId()
       const itemId = genId()
-      setCards(prev => [...prev, { id, title: '', date: null, items: [{ id: itemId, text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [] }] }])
+      setCards(prev => [...prev, { id, title: '', date: null, items: [{ id: itemId, text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [], repeat: 'none' }] }])
     }
   }
 
@@ -744,7 +821,7 @@ export default function App() {
       const item = await invoke<Item>('create_item', { cardId })
       setCards(prev => prev.map(c => c.id === cardId ? { ...c, items: [...c.items, item] } : c))
     } catch {
-      const item: Item = { id: genId(), text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [] }
+      const item: Item = { id: genId(), text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [], repeat: 'none' }
       setCards(prev => prev.map(c => c.id === cardId ? { ...c, items: [...c.items, item] } : c))
     }
   }
@@ -757,6 +834,14 @@ export default function App() {
     const payload: Record<string, unknown> = { id: itemId }
     payload[field] = value
     try { await invoke('update_item', payload) } catch {}
+    if (field === 'done' && value === true) {
+      try {
+        const newItem = await invoke<Item | null>('create_repeat_item', { id: itemId })
+        if (newItem) {
+          setCards(prev => prev.map(c => c.id === cardId ? { ...c, items: [...c.items, newItem] } : c))
+        }
+      } catch {}
+    }
   }
 
   const handleOpenItem = (cardId: string, itemId: string) => {
@@ -862,6 +947,49 @@ export default function App() {
     invoke('reorder_cards', { ids: cardsRef.current.map(c => c.id) }).catch(() => {})
   }, [])
 
+  const handleCreateProject = async (name: string, color: string) => {
+    if (!name.trim()) return
+    try {
+      const project = await invoke<Project>('create_project', { name: name.trim(), color })
+      setProjects(prev => [...prev, project])
+      setCurrentProjectId(project.id)
+      localStorage.setItem('currentProjectId', project.id)
+      setShowCreateForm(false)
+      setNewProjectName('')
+      setNewProjectColor(PROJECT_COLORS[0])
+    } catch {}
+  }
+
+  const handleDeleteProject = async (id: string) => {
+    if (!window.confirm('删除项目将同时删除其下所有便签和数据，确定？')) return
+    try {
+      await invoke('delete_project', { id })
+      setProjects(prev => prev.filter(p => p.id !== id))
+      if (currentProjectId === id) {
+        const remaining = projects.filter(p => p.id !== id)
+        if (remaining.length > 0) {
+          setCurrentProjectId(remaining[0].id)
+          localStorage.setItem('currentProjectId', remaining[0].id)
+        }
+      }
+    } catch {}
+  }
+
+  const handleRenameProject = async (id: string) => {
+    if (!renameValue.trim()) return
+    try {
+      await invoke('update_project', { id, name: renameValue.trim() })
+      setProjects(prev => prev.map(p => p.id === id ? { ...p, name: renameValue.trim() } : p))
+      setRenamingProject(null)
+    } catch {}
+  }
+
+  const switchProject = (id: string) => {
+    setCurrentProjectId(id)
+    localStorage.setItem('currentProjectId', id)
+    setProjectMenuOpen(false)
+  }
+
   const filteredCards = cards.filter(card => {
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
@@ -884,13 +1012,86 @@ export default function App() {
 
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-[var(--bg-page)] to-[var(--bg-page-to)] flex flex-col p-6">
-      <div className="shrink-0 flex items-center gap-3 mb-4">
-        <div className="relative w-64">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-300 dark:text-stone-600" />
+      <div className="shrink-0 flex items-center gap-2 mb-5 bg-[var(--bg-surface)]/40 backdrop-blur-sm rounded-xl px-3 py-2 border border-[var(--border-item)]/40">
+        {/* Project switcher */}
+        <div className="relative">
+          <button onClick={() => setProjectMenuOpen(!projectMenuOpen)}
+            className="flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium rounded-lg hover:bg-[var(--bg-surface)] transition-all active:scale-[0.97]"
+            style={{ borderLeft: `3px solid ${projects.find(p => p.id === currentProjectId)?.color || 'var(--accent)'}` }}>
+            <FolderKanban size={14} style={{ color: projects.find(p => p.id === currentProjectId)?.color || 'var(--accent)' }} />
+            <span className="text-stone-700 dark:text-stone-300">{projects.find(p => p.id === currentProjectId)?.name || '加载中...'}</span>
+            <ChevronDown size={12} className="text-stone-400 dark:text-stone-500" />
+          </button>
+          {projectMenuOpen && (
+            <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-white dark:bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-xl shadow-[0_8px_32px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] z-50 py-1 animate-fade-in overflow-hidden">
+              {projects.map(p => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] transition-colors group">
+                  <button onClick={() => switchProject(p.id)} className="flex items-center gap-2 flex-1 text-left text-sm text-stone-700 dark:text-stone-300 min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                    {renamingProject === p.id ? (
+                      <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                        onBlur={() => handleRenameProject(p.id)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRenameProject(p.id); if (e.key === 'Escape') setRenamingProject(null) }}
+                        className="flex-1 text-sm bg-transparent border-b border-[var(--accent)] outline-none px-0 py-0 text-stone-700 dark:text-stone-300 min-w-0"
+                        onClick={e => e.stopPropagation()} />
+                    ) : (
+                      <span className="truncate flex-1">{p.name}</span>
+                    )}
+                    {currentProjectId === p.id && <CheckCheck size={12} className="text-[var(--accent)] shrink-0" />}
+                  </button>
+                  <button onClick={() => { setRenamingProject(p.id); setRenameValue(p.name) }}
+                    className="opacity-0 group-hover:opacity-100 text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] transition-all p-0.5 shrink-0">
+                    <Edit3 size={12} />
+                  </button>
+                  <button onClick={() => handleDeleteProject(p.id)}
+                    className="opacity-0 group-hover:opacity-100 text-stone-400 dark:text-stone-500 hover:text-red-500 transition-all p-0.5 shrink-0">
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+              <div className="border-t border-[var(--border-divider)]/40 mt-1 pt-1">
+                {showCreateForm ? (
+                  <div className="px-3 py-2 space-y-2" onClick={e => e.stopPropagation()}>
+                    <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(newProjectName, newProjectColor); if (e.key === 'Escape') { setShowCreateForm(false); setNewProjectName('') } }}
+                      placeholder="项目名称..."
+                      className="w-full text-sm bg-[var(--bg-surface)] border border-[var(--border-item)] rounded-lg px-2.5 py-1.5 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 placeholder-stone-400 dark:placeholder-stone-500 transition-colors" />
+                    <div className="flex items-center gap-1.5">
+                      {PROJECT_COLORS.map(c => (
+                        <button key={c} onClick={() => setNewProjectColor(c)}
+                          className={'w-5 h-5 rounded-full transition-all ' + (newProjectColor === c ? 'ring-2 ring-offset-1 ring-stone-400 dark:ring-offset-stone-800 scale-110' : 'ring-0 hover:scale-110')}
+                          style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <button onClick={() => handleCreateProject(newProjectName, newProjectColor)}
+                        className="flex-1 text-xs font-semibold bg-[var(--accent)] text-white rounded-lg px-3 py-1.5 hover:brightness-110 transition-all active:scale-[0.95]">
+                        创建
+                      </button>
+                      <button onClick={() => { setShowCreateForm(false); setNewProjectName('') }}
+                        className="flex-1 text-xs font-semibold bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400 rounded-lg px-3 py-1.5 hover:bg-stone-200 dark:hover:bg-stone-600 transition-all active:scale-[0.95]">
+                        取消
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowCreateForm(true)}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] transition-colors">
+                    <Plus size={14} /> 新建项目
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Search */}
+        <div className="relative flex-1 max-w-sm">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-300 dark:text-stone-600" />
           <input ref={searchRef}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="搜索便签...  (⌘K /)"
+            placeholder="搜索 (⌘K /)"
             className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--input-bg)] text-stone-700 dark:text-stone-300 placeholder-stone-400 dark:placeholder-stone-500 border border-[var(--border-item)] rounded-lg outline-none focus:border-[var(--accent)]/50 focus:shadow-[0_0_0_3px_rgb(var(--accent-rgb)/0.08)] transition-all"
           />
           {searchQuery && (
@@ -912,36 +1113,59 @@ export default function App() {
             </div>
           )}
         </div>
-        <button onClick={() => setDark(!dark)}
-          className="p-2 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-          title={dark ? '切换浅色' : '切换暗色'}>
-          {dark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        <button onClick={() => setViewMode(viewMode === 'grid' ? 'timeline' : 'grid')}
-          className="p-2 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-          title={viewMode === 'grid' ? '时间线视图' : '卡片视图'}>
-          {viewMode === 'grid' ? <CalendarDays size={16} /> : <LayoutGrid size={16} />}
-        </button>
-        <button onClick={async () => {
-          try {
-            const json = await invoke<string>('export_data')
-            const blob = new Blob([json], { type: 'application/json' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `todopotato-backup-${new Date().toISOString().slice(0, 10)}.json`
-            a.click()
-            URL.revokeObjectURL(url)
-          } catch {}
-        }} className="p-2 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-          title="导出数据">
-          <Download size={16} />
-        </button>
-        <button onClick={() => importRef.current?.click()}
-          className="p-2 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-          title="导入数据">
-          <Upload size={16} />
-        </button>
+
+        <div className="w-px h-5 bg-[var(--border-divider)]/40 mx-1" />
+
+        {/* View & tools */}
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => setViewMode(viewMode === 'grid' ? 'timeline' : 'grid')}
+            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
+            title={viewMode === 'grid' ? '时间线视图' : '卡片视图'}>
+            {viewMode === 'grid' ? <CalendarDays size={15} /> : <LayoutGrid size={15} />}
+          </button>
+          <button onClick={() => setShowStats(true)}
+            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
+            title="统计看板">
+            <BarChart3 size={15} />
+          </button>
+          <button onClick={() => setShowPomodoro(true)}
+            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
+            title="番茄钟">
+            <Timer size={15} />
+          </button>
+        </div>
+
+        <div className="w-px h-5 bg-[var(--border-divider)]/40 mx-1" />
+
+        {/* Utilities */}
+        <div className="flex items-center gap-0.5">
+          <button onClick={() => setDark(!dark)}
+            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
+            title={dark ? '浅色模式' : '深色模式'}>
+            {dark ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <button onClick={async () => {
+            try {
+              const json = await invoke<string>('export_data')
+              const blob = new Blob([json], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `todopotato-backup-${new Date().toISOString().slice(0, 10)}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+            } catch {}
+          }} className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
+            title="导出数据">
+            <Download size={15} />
+          </button>
+          <button onClick={() => importRef.current?.click()}
+            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
+            title="导入数据">
+            <Upload size={15} />
+          </button>
+        </div>
+
         <input ref={importRef} type="file" hidden accept=".json"
           onChange={async (e) => {
             const file = e.target.files?.[0]
@@ -950,15 +1174,16 @@ export default function App() {
             try {
               const text = await file.text()
               await invoke('import_data', { json: text })
-              loadCards()
+              loadProjects()
             } catch (err) {
               alert('导入失败：' + err)
             }
             e.target.value = ''
           }} />
-        <div className="text-xs text-stone-400 dark:text-stone-500">
-          {searchQuery ? `找到 ${filteredCards.length} 个结果` : `${cards.length} 个便签`}
-        </div>
+
+        <span className="text-xs text-stone-400 dark:text-stone-500 ml-auto tabular-nums">
+          {searchQuery ? `${filteredCards.length} 个结果` : `${cards.length} 个便签`}
+        </span>
       </div>
       <div className="flex-1 flex items-start gap-4 overflow-x-auto">
         {viewMode === 'grid' ? (
@@ -985,8 +1210,11 @@ export default function App() {
             />
           ))}
           <button onClick={handleAddCard}
-            className="group w-[300px] h-12 shrink-0 flex items-center justify-center border-2 border-dashed border-stone-300 dark:border-stone-600 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 hover:border-stone-400 dark:hover:border-stone-500 transition-all text-xs rounded-lg active:scale-[0.98]">
-            <Plus size={16} className="group-hover:rotate-90 transition-transform duration-300" /> 添加便签
+            className="group w-[300px] h-14 shrink-0 flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 dark:border-stone-600 text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:border-[var(--accent)]/40 hover:bg-[var(--bg-surface)]/40 transition-all text-xs rounded-xl active:scale-[0.97]">
+            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-stone-700 group-hover:bg-[var(--accent)]/10 group-hover:text-[var(--accent)] transition-all">
+              <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300" />
+            </span>
+            添加便签
           </button>
           </>
         ) : (
@@ -1002,6 +1230,326 @@ export default function App() {
         return <TaskDetailModal card={card} item={item} onClose={() => setOpenItem(null)}
           onUpdate={handleUpdateItem} onDelete={handleDeleteItem} />
       })()}
+      {showStats && <StatisticsPanel onClose={() => setShowStats(false)} />}
+      {showPomodoro && <PomodoroTimer onClose={() => setShowPomodoro(false)} />}
     </div>
   )
+}
+
+function StatisticsPanel({ onClose }: { onClose: () => void }) {
+  const [stats, setStats] = useState<Statistics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState<'overview' | 'daily'>('overview')
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [onClose])
+
+  const load = async () => {
+    try {
+      const data = await invoke<Statistics>('get_statistics')
+      setStats(data)
+    } catch {}
+    setLoading(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}>
+      <div className="bg-gradient-to-b from-[var(--bg-card-start)] to-[var(--bg-surface-hover)] border border-[var(--border-card)] rounded-xl shadow-[0_8px_32px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] max-w-3xl w-full max-h-[85vh] overflow-y-auto p-6 animate-scale-in"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <BarChart3 size={18} className="text-[var(--accent)]" />
+            <h2 className="text-lg font-bold text-stone-800 dark:text-stone-200">统计看板</h2>
+          </div>
+          <button onClick={onClose} className="text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-stone-400 dark:text-stone-500 text-sm">加载中...</div>
+        ) : !stats ? (
+          <div className="flex items-center justify-center py-16 text-stone-400 dark:text-stone-500 text-sm">暂无数据</div>
+        ) : (
+          <>
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+              {[
+                { label: '总事项', value: stats.total_items, color: 'text-[var(--accent)]' },
+                { label: '已完成', value: stats.completed_items, color: 'text-emerald-500' },
+                { label: '完成率', value: stats.completion_rate.toFixed(1) + '%', color: stats.completion_rate > 50 ? 'text-emerald-500' : 'text-orange-500' },
+                { label: '专注时长', value: formatDuration(stats.total_minutes), color: 'text-blue-500' },
+              ].map(s => (
+                <div key={s.label} className="bg-[var(--bg-surface)] rounded-lg p-3 text-center">
+                  <div className={'text-2xl font-bold ' + s.color}>{s.value}</div>
+                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-1">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 mb-4 border-b border-[var(--border-divider)]/40">
+              <button onClick={() => setTab('overview')}
+                className={'px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ' + (tab === 'overview' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
+                概览
+              </button>
+              <button onClick={() => setTab('daily')}
+                className={'px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ' + (tab === 'daily' ? 'border-[var(--accent)] text-[var(--accent)]' : 'border-transparent text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
+                每日明细
+              </button>
+            </div>
+
+            {tab === 'overview' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Priority distribution */}
+                <div className="bg-[var(--bg-surface)] rounded-lg p-4">
+                  <div className="text-xs font-semibold text-stone-500 dark:text-stone-400 mb-3">优先级分布</div>
+                  <div className="space-y-2">
+                    {stats.priority_distribution.map(p => {
+                      const max = Math.max(...stats.priority_distribution.map(x => x.count), 1)
+                      const pct = (p.count / max * 100)
+                      const colors: Record<string, string> = { p0: 'bg-red-500', p1: 'bg-orange-500', p2: 'bg-blue-500', p3: 'bg-stone-400' }
+                      const labels: Record<string, string> = { p0: 'P0 紧急', p1: 'P1 高', p2: 'P2 中', p3: 'P3 低', none: '无优先级' }
+                      return (
+                        <div key={p.label} className="flex items-center gap-2">
+                          <span className="text-xs text-stone-600 dark:text-stone-400 w-16 shrink-0">{labels[p.label] || p.label}</span>
+                          <div className="flex-1 h-4 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+                            <div className={'h-full rounded-full transition-all ' + (colors[p.label] || 'bg-stone-400')} style={{ width: pct + '%' }} />
+                          </div>
+                          <span className="text-xs text-stone-500 dark:text-stone-400 w-8 text-right">{p.count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Items by date */}
+                <div className="bg-[var(--bg-surface)] rounded-lg p-4">
+                  <div className="text-xs font-semibold text-stone-500 dark:text-stone-400 mb-3">按日期分布</div>
+                  {stats.items_by_date.length === 0 ? (
+                    <div className="text-xs text-stone-400 dark:text-stone-500 py-4 text-center">暂无带日期的事项</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {stats.items_by_date.slice(0, 10).map(d => (
+                        <div key={d.date} className="flex items-center gap-2">
+                          <span className="text-xs text-stone-600 dark:text-stone-400 w-24 shrink-0">{d.date}</span>
+                          <div className="flex-1 h-3 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-[var(--accent)]/60 rounded-full" style={{ width: Math.min(d.count / Math.max(...stats.items_by_date.map(x => x.count), 1) * 100, 100) + '%' }} />
+                          </div>
+                          <span className="text-xs text-stone-500 dark:text-stone-400 w-6 text-right">{d.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {tab === 'daily' && (
+              <div className="bg-[var(--bg-surface)] rounded-lg p-4">
+                <div className="text-xs font-semibold text-stone-500 dark:text-stone-400 mb-3">每日统计（近 30 天）</div>
+                {stats.daily_stats.length === 0 ? (
+                  <div className="text-xs text-stone-400 dark:text-stone-500 py-4 text-center">暂无带日期的事项</div>
+                ) : (
+                  <div className="space-y-1">
+                    {stats.daily_stats.map(d => (
+                      <div key={d.date} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] transition-colors">
+                        <span className="text-xs text-stone-600 dark:text-stone-400 w-24 shrink-0">{d.date}</span>
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="flex-1 h-3 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden flex">
+                            <div className="h-full bg-emerald-400/70 rounded-l-full transition-all" style={{ width: (d.total > 0 ? d.completed / d.total * 100 : 0) + '%', minWidth: d.completed > 0 ? '4px' : '0' }} />
+                            <div className="h-full bg-stone-300 dark:bg-stone-600 rounded-r-full transition-all" style={{ width: (d.total > 0 ? (d.total - d.completed) / d.total * 100 : 100) + '%', minWidth: (d.total - d.completed) > 0 ? '4px' : '0' }} />
+                          </div>
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400 w-16 text-right tabular-nums">{d.completed}/{d.total}</span>
+                        </div>
+                        {d.minutes > 0 && <span className="text-[10px] text-stone-500 dark:text-stone-400 w-14 text-right tabular-nums">{formatDuration(d.minutes)}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface Statistics {
+  total_items: number
+  completed_items: number
+  completion_rate: number
+  total_minutes: number
+  items_by_date: { date: string; count: number }[]
+  priority_distribution: { label: string; count: number }[]
+  daily_stats: { date: string; total: number; completed: number; minutes: number }[]
+}
+
+function PomodoroTimer({ onClose }: { onClose: () => void }) {
+  const MODE_WORK = 25
+  const MODE_BREAK = 5
+  const [mode, setMode] = useState<'work' | 'break'>('work')
+  const [minutes, setMinutes] = useState(MODE_WORK)
+  const [seconds, setSeconds] = useState(0)
+  const [running, setRunning] = useState(false)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [pomodoroStats, setPomodoroStats] = useState<PomodoroStats | null>(null)
+
+  useEffect(() => {
+    loadStats()
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+
+  useEffect(() => {
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [])
+
+  const loadStats = async () => {
+    try {
+      const s = await invoke<PomodoroStats>('get_pomodoro_stats')
+      setPomodoroStats(s)
+    } catch {}
+  }
+
+  const start = () => {
+    setRunning(true)
+    intervalRef.current = setInterval(() => {
+      setSeconds(prev => {
+        if (prev > 0) return prev - 1
+        setMinutes(m => {
+          if (m > 0) return m - 1
+          setRunning(false)
+          setMode(mode === 'work' ? 'break' : 'work')
+          if (mode === 'work') {
+            invoke('log_pomodoro', { item_id: '', duration_minutes: MODE_WORK }).catch(() => {})
+            loadStats()
+          }
+          return mode === 'work' ? MODE_BREAK : MODE_WORK
+        })
+        return 59
+      })
+    }, 1000)
+  }
+
+  const pause = () => {
+    setRunning(false)
+    if (intervalRef.current) clearInterval(intervalRef.current)
+  }
+
+  const reset = () => {
+    pause()
+    setMode('work')
+    setMinutes(MODE_WORK)
+    setSeconds(0)
+  }
+
+  const totalSeconds = minutes * 60 + seconds
+  const total = (mode === 'work' ? MODE_WORK : MODE_BREAK) * 60
+  const progress = total > 0 ? (total - totalSeconds) / total * 100 : 0
+
+  return (
+    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}>
+      <div className="bg-gradient-to-b from-[var(--bg-card-start)] to-[var(--bg-surface-hover)] border border-[var(--border-card)] rounded-xl shadow-[0_8px_32px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] max-w-sm w-full p-6 animate-scale-in"
+        onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Timer size={18} className="text-[var(--accent)]" />
+            <h2 className="text-lg font-bold text-stone-800 dark:text-stone-200">番茄钟</h2>
+          </div>
+          <button onClick={onClose} className="text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Mode switch */}
+        <div className="flex bg-[var(--bg-surface)] rounded-lg p-0.5 mb-6">
+          <button onClick={() => { reset(); setMode('work') }}
+            className={'flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ' + (mode === 'work' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
+            专注 25分
+          </button>
+          <button onClick={() => { reset(); setMode('break') }}
+            className={'flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ' + (mode === 'break' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
+            休息 5分
+          </button>
+        </div>
+
+        {/* Timer display */}
+        <div className="relative w-48 h-48 mx-auto mb-6">
+          <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="none" stroke="var(--border-item)" strokeWidth="6" />
+            <circle cx="50" cy="50" r="45" fill="none" stroke="var(--accent)" strokeWidth="6"
+              strokeDasharray={`${progress * 2.83} ${283 - progress * 2.83}`}
+              strokeLinecap="round" className="transition-all duration-1000" />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-4xl font-bold tabular-nums text-stone-800 dark:text-stone-200">
+              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+            </span>
+            <span className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+              {mode === 'work' ? '专注中' : '休息中'}
+            </span>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center justify-center gap-3 mb-6">
+          {!running ? (
+            <button onClick={start}
+              className="flex items-center gap-2 px-6 py-2 bg-[var(--accent)] text-white text-sm font-semibold rounded-lg hover:brightness-110 transition-all active:scale-[0.95]">
+              <Play size={16} /> 开始
+            </button>
+          ) : (
+            <button onClick={pause}
+              className="flex items-center gap-2 px-6 py-2 bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 text-sm font-semibold rounded-lg hover:bg-stone-300 dark:hover:bg-stone-600 transition-all active:scale-[0.95]">
+              <Pause size={16} /> 暂停
+            </button>
+          )}
+          <button onClick={reset}
+            className="p-2 rounded-lg text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-700/50 transition-all"
+            title="重置">
+            <RotateCcw size={16} />
+          </button>
+        </div>
+
+        {/* Stats */}
+        {pomodoroStats && (
+          <div className="flex items-center justify-around bg-[var(--bg-surface)] rounded-lg p-3 text-center">
+            <div>
+              <div className="text-lg font-bold text-[var(--accent)]">{pomodoroStats.today_sessions}</div>
+              <div className="text-[10px] text-stone-500 dark:text-stone-400">今日专注</div>
+            </div>
+            <div className="w-px h-8 bg-[var(--border-divider)]/40" />
+            <div>
+              <div className="text-lg font-bold text-emerald-500">{formatDuration(pomodoroStats.today_minutes)}</div>
+              <div className="text-[10px] text-stone-500 dark:text-stone-400">今日时长</div>
+            </div>
+            <div className="w-px h-8 bg-[var(--border-divider)]/40" />
+            <div>
+              <div className="text-lg font-bold text-stone-600 dark:text-stone-400">{pomodoroStats.total_sessions}</div>
+              <div className="text-[10px] text-stone-500 dark:text-stone-400">总计</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface PomodoroStats {
+  total_sessions: number
+  total_minutes: number
+  today_sessions: number
+  today_minutes: number
 }
