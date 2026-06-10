@@ -527,7 +527,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
 
   const items = cards.flatMap((card, ci) =>
     card.items
-      .filter(it => calcMinutes(it.start, it.end) > 0 && it.text.trim())
+      .filter(it => calcMinutes(it.start, it.end) > 0)
       .map(it => ({
         ...it,
         cardId: card.id,
@@ -539,7 +539,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
   )
 
   const noTimeItems = cards.flatMap((card, ci) =>
-    card.items.filter(it => calcMinutes(it.start, it.end) <= 0 || !it.text.trim()).map(it => ({
+    card.items.filter(it => calcMinutes(it.start, it.end) <= 0).map(it => ({
       ...it, cardId: card.id, cardTitle: card.title, color: CARD_COLORS[ci % CARD_COLORS.length],
     }))
   )
@@ -630,7 +630,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
                         <span className="w-1 h-1 rounded-full mt-1.5 shrink-0 opacity-60" style={{ backgroundColor: item.color }} />
                         <div className="min-w-0 flex-1 flex items-baseline gap-1.5">
                           <span className="text-[12px] font-medium text-stone-700 dark:text-stone-300 leading-tight truncate">
-                            {item.text}
+                            {item.text || item.cardTitle || '无标题'}
                           </span>
                           <span className="text-[9px] text-stone-400 dark:text-stone-500 font-mono whitespace-nowrap tabular-nums">
                             {item.start}–{item.end}
