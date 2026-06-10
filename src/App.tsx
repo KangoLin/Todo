@@ -229,6 +229,9 @@ function NoteCard({
                   <div onClick={e => e.stopPropagation()}>
                     <TimePicker value={item.end} onChange={v => onUpdateItem(card.id, item.id, 'end', v)} />
                   </div>
+                  {calcMinutes(item.start, item.end) > 0 && (
+                    <span className="text-[10px] font-semibold text-white bg-[var(--accent-muted)] rounded-full px-1.5 py-0.5 ml-0.5">{formatDuration(calcMinutes(item.start, item.end))}</span>
+                  )}
                 </div>
                 <button onClick={e => { e.stopPropagation(); onDeleteItem(card.id, item.id) }} className="text-stone-400 dark:text-stone-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0 rounded p-1 ml-auto"><X size={13} /></button>
               </div>
