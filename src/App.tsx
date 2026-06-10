@@ -68,11 +68,11 @@ function genId(): string {
   return crypto.randomUUID()
 }
 
-function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function TimePicker({ value, onChange, compact }: { value: string; onChange: (v: string) => void; compact?: boolean }) {
   const ref = useRef<HTMLInputElement>(null)
   return (
     <div className="relative cursor-pointer" onClick={() => ref.current?.showPicker()}>
-      <span className="block text-xs font-mono text-stone-600 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-stone-200/80 dark:hover:bg-stone-700/50 active:scale-[0.95] transition-all bg-stone-100/60 dark:bg-stone-800/60 px-3 py-1.5 rounded font-medium min-w-[52px] text-center">
+      <span className={'block font-mono text-stone-600 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-stone-200/80 dark:hover:bg-stone-700/50 active:scale-[0.95] transition-all bg-stone-100/60 dark:bg-stone-800/60 rounded font-medium text-center ' + (compact ? 'text-[9px] px-0.5 py-px min-w-[28px]' : 'text-xs px-3 py-1.5 min-w-[52px]')}>
         {value || '--:--'}
       </span>
       <input ref={ref} type="time" value={value} onChange={e => onChange(e.target.value)}
@@ -530,10 +530,11 @@ function formatDateLabel(d: string) {
   return label
 }
 
-function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem }: {
+function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem, onUpdateItem }: {
   items: (Item & { cardId: string; cardTitle: string; color: string; startMin: number; endMin: number })[];
   minHour: number; maxHour: number; showNow: boolean;
   onOpenItem: (cardId: string, itemId: string) => void;
+  onUpdateItem: (cardId: string, itemId: string, field: keyof Item, value: unknown) => void;
 }) {
   const now = new Date()
   const nowMin = now.getHours() * 60 + now.getMinutes()
@@ -608,8 +609,10 @@ function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem }: {
                         <span className="text-[10px] text-stone-400 dark:text-stone-500 shrink-0 hidden sm:inline">{item.cardTitle}</span>
                       )}
                     </div>
-                    <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono tabular-nums">
-                      {item.start}–{item.end}
+                    <span className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                      <TimePicker compact value={item.start} onChange={v => onUpdateItem(item.cardId, item.id, 'start', v)} />
+                      <span className="text-stone-400 dark:text-stone-500 text-[9px]">–</span>
+                      <TimePicker compact value={item.end} onChange={v => onUpdateItem(item.cardId, item.id, 'end', v)} />
                     </span>
                   </div>
                 </div>
@@ -622,7 +625,11 @@ function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem }: {
   )
 }
 
-function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardId: string, itemId: string) => void }) {
+function TimelineView({ cards, onOpenItem, onUpdateItem }: {
+  cards: Card[];
+  onOpenItem: (cardId: string, itemId: string) => void;
+  onUpdateItem: (cardId: string, itemId: string, field: keyof Item, value: unknown) => void;
+}) {
   const today = new Date().toISOString().slice(0, 10)
 
   const timedItems = cards.flatMap((card, ci) =>
@@ -693,6 +700,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
                     maxHour={maxHour}
                     showNow={dateKey === today}
                     onOpenItem={onOpenItem}
+                    onUpdateItem={onUpdateItem}
                   />
                 </div>
               )
@@ -1269,7 +1277,7 @@ export default function App() {
           </>
         ) : (
           <div className="flex-1 min-h-0">
-            <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} />
+            <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} />
           </div>
         )}
       </div>
