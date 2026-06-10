@@ -527,7 +527,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
 
   const items = cards.flatMap((card, ci) =>
     card.items
-      .filter(it => it.start && it.end && it.text.trim())
+      .filter(it => calcMinutes(it.start, it.end) > 0 && it.text.trim())
       .map(it => ({
         ...it,
         cardId: card.id,
@@ -539,7 +539,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
   )
 
   const noTimeItems = cards.flatMap((card, ci) =>
-    card.items.filter(it => !it.start || !it.end || !it.text.trim()).map(it => ({
+    card.items.filter(it => calcMinutes(it.start, it.end) <= 0 || !it.text.trim()).map(it => ({
       ...it, cardId: card.id, cardTitle: card.title, color: CARD_COLORS[ci % CARD_COLORS.length],
     }))
   )
