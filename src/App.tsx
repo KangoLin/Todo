@@ -131,7 +131,6 @@ function NoteCard({
 }: NoteCardProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const totalMin = card.items.reduce((s, it) => s + calcMinutes(it.start, it.end), 0)
   const doneCount = card.items.filter(i => i.done).length
 
   const [collapsed, setCollapsed] = useState(false)
@@ -195,17 +194,17 @@ function NoteCard({
                 (item.done
                   ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 border-l-[3px] border-l-rose-300'
                   : 'border-[var(--border-item)] bg-transparent hover:bg-[var(--bg-surface-hover)] border-l-[3px] border-l-transparent hover:border-l-[var(--accent)]')}>
-              <div className="flex items-center gap-1 px-2.5 py-1.5 border-b border-[var(--border-divider)]/50 bg-[var(--bg-surface)]">
+              <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[var(--border-divider)]/50 bg-[var(--bg-surface)]">
                 <span onClick={e => e.stopPropagation()} className="text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-700/40 cursor-grab active:cursor-grabbing shrink-0 rounded p-1">
-                  <GripVertical size={12} />
+                  <GripVertical size={11} />
                 </span>
                 <button onClick={e => { e.stopPropagation(); onUpdateItem(card.id, item.id, 'done', !item.done) }}
-                  className={'w-5 h-5 border shrink-0 flex items-center justify-center transition-all duration-200 rounded ' + (item.done ? 'bg-[var(--accent)] border-[var(--accent)] scale-100' : 'border-stone-300 dark:border-stone-600 hover:border-[var(--accent)] hover:bg-stone-100 dark:hover:bg-stone-800/60')}>
-                  {item.done && <svg viewBox="0 0 12 12" className="w-3 h-3 text-white animate-scale-in" fill="none" stroke="currentColor" strokeWidth="3"><path d="M2 6l3 3 5-5" /></svg>}
+                  className={'w-4 h-4 border shrink-0 flex items-center justify-center transition-all duration-200 rounded ' + (item.done ? 'bg-[var(--accent)] border-[var(--accent)] scale-100' : 'border-stone-300 dark:border-stone-600 hover:border-[var(--accent)] hover:bg-stone-100 dark:hover:bg-stone-800/60')}>
+                  {item.done && <svg viewBox="0 0 12 12" className="w-2.5 h-2.5 text-white animate-scale-in" fill="none" stroke="currentColor" strokeWidth="3"><path d="M2 6l3 3 5-5" /></svg>}
                 </button>
                 {item.priority !== 'none' && (
                   <button onClick={e => { e.stopPropagation(); const nxt = item.priority === 'p0' ? 'p1' : item.priority === 'p1' ? 'p2' : item.priority === 'p2' ? 'p3' : 'p0'; onUpdateItem(card.id, item.id, 'priority', nxt) }}
-                    className={'text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 leading-none transition-all active:scale-[0.9] ' + (
+                    className={'text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 leading-none transition-all active:scale-[0.9] ' + (
                       item.priority === 'p0' ? 'bg-red-500/10 dark:bg-red-500/15 text-red-600 dark:text-red-400' :
                       item.priority === 'p1' ? 'bg-orange-500/10 dark:bg-orange-500/15 text-orange-600 dark:text-orange-400' :
                       item.priority === 'p2' ? 'bg-blue-500/10 dark:bg-blue-500/15 text-blue-600 dark:text-blue-400' :
@@ -220,8 +219,8 @@ function NoteCard({
                     {item.tags.length > 3 && <span className="text-[9px] text-stone-400 dark:text-stone-500 font-medium ml-0.5">+{item.tags.length - 3}</span>}
                   </div>
                 )}
-                <div className="flex items-center gap-1.5 bg-[var(--time-bg)] border border-[var(--border-time)] rounded-md px-2.5 py-1 shrink-0 cursor-pointer">
-                  <Clock size={12} className="text-stone-400 dark:text-stone-500 shrink-0 hover:text-[var(--accent)] transition-colors" />
+                <div className="flex items-center gap-1 bg-[var(--time-bg)] border border-[var(--border-time)] rounded-md px-1.5 py-0.5 cursor-pointer">
+                  <Clock size={11} className="text-stone-400 dark:text-stone-500 shrink-0 hover:text-[var(--accent)] transition-colors" />
                   <div onClick={e => e.stopPropagation()}>
                     <TimePicker value={item.start} onChange={v => onUpdateItem(card.id, item.id, 'start', v)} />
                   </div>
@@ -229,11 +228,11 @@ function NoteCard({
                   <div onClick={e => e.stopPropagation()}>
                     <TimePicker value={item.end} onChange={v => onUpdateItem(card.id, item.id, 'end', v)} />
                   </div>
-                  {calcMinutes(item.start, item.end) > 0 && (
-                    <span className="text-[10px] font-semibold text-white bg-[var(--accent-muted)] rounded-full px-1.5 py-0.5 ml-0.5">{formatDuration(calcMinutes(item.start, item.end))}</span>
-                  )}
                 </div>
-                <button onClick={e => { e.stopPropagation(); onDeleteItem(card.id, item.id) }} className="text-stone-400 dark:text-stone-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0 rounded p-1 ml-auto"><X size={13} /></button>
+                {calcMinutes(item.start, item.end) > 0 && (
+                  <span className="text-[9px] font-semibold text-white bg-[var(--accent-muted)] rounded-full px-1.5 py-[3px] shrink-0">{formatDuration(calcMinutes(item.start, item.end))}</span>
+                )}
+                <button onClick={e => { e.stopPropagation(); onDeleteItem(card.id, item.id) }} className="text-stone-400 dark:text-stone-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors shrink-0 rounded p-1 ml-auto"><X size={12} /></button>
               </div>
               <div className="flex items-center gap-2 px-2.5 py-2">
           <input
@@ -265,9 +264,8 @@ function NoteCard({
           </button>
           <div ref={bottomRef} />
         </div>
-        <div className="bg-[var(--bg-surface)] rounded-lg px-3 py-2 -mx-1 mt-1 text-xs shrink-0 space-y-0.5">
+        <div className="bg-[var(--bg-surface)] rounded-lg px-3 py-2 -mx-1 mt-1 text-xs shrink-0">
           <div className="text-stone-500 dark:text-stone-400">{card.title || '无标题'} · <span className={doneCount === card.items.length && card.items.length > 0 ? 'text-[var(--accent)] font-medium' : ''}>{doneCount}/{card.items.length}</span> 项完成</div>
-          {totalMin > 0 && <div className="inline-flex items-center gap-1 text-[11px] font-semibold text-white bg-[var(--accent-muted)] rounded-full px-2.5 py-0.5">总计 {formatDuration(totalMin)}</div>}
         </div>
           </div>
         </div>
