@@ -625,10 +625,11 @@ function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem, onUpdateItem }
   )
 }
 
-function TimelineView({ cards, onOpenItem, onUpdateItem }: {
+function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
   cards: Card[];
   onOpenItem: (cardId: string, itemId: string) => void;
   onUpdateItem: (cardId: string, itemId: string, field: keyof Item, value: unknown) => void;
+  onTimelineAddItem: (date: string) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10)
 
@@ -648,11 +649,11 @@ function TimelineView({ cards, onOpenItem, onUpdateItem }: {
 
   const noTimeItems = cards.flatMap((card, ci) =>
     card.items.filter(it => calcMinutes(it.start, it.end) <= 0).map(it => ({
-      ...it, cardId: card.id, cardTitle: card.title, color: CARD_COLORS[ci % CARD_COLORS.length],
+      ...it, cardId: card.id, cardTitle: card.title, cardDate: card.date, color: CARD_COLORS[ci % CARD_COLORS.length],
     }))
   )
 
-  if (!timedItems.length && !noTimeItems.length) {
+  if (!cards.length) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-stone-400 dark:text-stone-500 gap-2">
         <Calendar size={32} strokeWidth={1} className="opacity-40" />
@@ -661,68 +662,90 @@ function TimelineView({ cards, onOpenItem, onUpdateItem }: {
     )
   }
 
-  const grouped: Record<string, typeof timedItems> = {}
+  // Get all unique dates from cards (including null)
+  const dateSet = new Set(cards.map(c => c.date || ''))
+  const sortedDates = Array.from(dateSet).sort()
+
+  // Group items by date
+  const timedByDate: Record<string, typeof timedItems> = {}
   timedItems.forEach(it => {
     const key = it.cardDate || ''
-    if (!grouped[key]) grouped[key] = []
-    grouped[key].push(it)
+    if (!timedByDate[key]) timedByDate[key] = []
+    timedByDate[key].push(it)
   })
-  const sortedDates = Object.keys(grouped).sort()
+  const noTimeByDate: Record<string, typeof noTimeItems> = {}
+  noTimeItems.forEach(it => {
+    const key = it.cardDate || ''
+    if (!noTimeByDate[key]) noTimeByDate[key] = []
+    noTimeByDate[key].push(it)
+  })
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto pr-2">
-        {timedItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 text-stone-400 dark:text-stone-500 gap-2">
-            <Clock size={24} strokeWidth={1} className="opacity-40" />
-            <p className="text-xs">事项尚未设定时间块</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {sortedDates.map(dateKey => {
-              const dateItems = grouped[dateKey]
-              const allStart = dateItems.map(i => i.startMin)
-              const allEnd = dateItems.map(i => i.endMin)
-              const minHour = Math.max(0, Math.floor((Math.min(...allStart) - 30) / 60))
-              const maxHour = Math.min(23, Math.ceil((Math.max(...allEnd) + 30) / 60))
+        <div className="space-y-5">
+          {sortedDates.map(dateKey => {
+            const hasTimed = timedByDate[dateKey]?.length > 0
+            const hasNoTime = noTimeByDate[dateKey]?.length > 0
+            if (!hasTimed && !hasNoTime) return null
 
-              return (
-                <div key={dateKey}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 tracking-wide uppercase">
-                      {dateKey ? formatDateLabel(dateKey) : '未设定日期'}
-                    </span>
-                    <div className="flex-1 border-t border-[var(--border-divider)]/15" />
-                  </div>
-                  <TimeGrid
-                    items={dateItems}
-                    minHour={minHour}
-                    maxHour={maxHour}
-                    showNow={dateKey === today}
-                    onOpenItem={onOpenItem}
-                    onUpdateItem={onUpdateItem}
-                  />
+            return (
+              <div key={dateKey}>
+                <div className="flex items-center gap-2 mb-2">
+                  <button onClick={() => onTimelineAddItem(dateKey)}
+                    className="shrink-0 w-4 h-4 rounded-full bg-stone-200 dark:bg-stone-700 hover:bg-[var(--accent)] hover:text-white text-stone-500 dark:text-stone-400 flex items-center justify-center transition-all active:scale-[0.9]">
+                    <Plus size={10} strokeWidth={2.5} />
+                  </button>
+                  <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 tracking-wide uppercase">
+                    {dateKey ? formatDateLabel(dateKey) : '未设定日期'}
+                  </span>
+                  <div className="flex-1 border-t border-[var(--border-divider)]/15" />
                 </div>
-              )
-            })}
-          </div>
-        )}
 
-        {noTimeItems.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-[var(--border-divider)]/20">
-            <div className="text-[11px] text-stone-400 dark:text-stone-500 mb-2 font-medium">未设定时间</div>
-            <div className="space-y-0.5">
-              {noTimeItems.map(it => (
-                <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)] transition-colors active:scale-[0.98] text-stone-600 dark:text-stone-400">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0 opacity-60" style={{ backgroundColor: it.color }} />
-                  <span className="truncate">{it.text || it.cardTitle || '无标题'}</span>
-                  {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 ml-auto text-[10px]">{it.cardTitle}</span>}
-                </button>
-              ))}
+                {hasTimed && (() => {
+                  const dateItems = timedByDate[dateKey]
+                  const allStart = dateItems.map(i => i.startMin)
+                  const allEnd = dateItems.map(i => i.endMin)
+                  const minHour = Math.max(0, Math.floor((Math.min(...allStart) - 30) / 60))
+                  const maxHour = Math.min(23, Math.ceil((Math.max(...allEnd) + 30) / 60))
+                  return (
+                    <TimeGrid
+                      items={dateItems}
+                      minHour={minHour}
+                      maxHour={maxHour}
+                      showNow={dateKey === today}
+                      onOpenItem={onOpenItem}
+                      onUpdateItem={onUpdateItem}
+                    />
+                  )
+                })()}
+
+                {hasNoTime && (
+                  <div className={hasTimed ? 'mt-2 space-y-0.5' : 'space-y-0.5'}>
+                    {noTimeByDate[dateKey].map(it => (
+                      <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
+                        className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)] transition-colors active:scale-[0.98] text-stone-600 dark:text-stone-400">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0 opacity-60" style={{ backgroundColor: it.color }} />
+                        <span className="truncate">{it.text || it.cardTitle || '无标题'}</span>
+                        {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 ml-auto text-[10px]">{it.cardTitle}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {!sortedDates.filter(d => {
+            const k = d || ''
+            return timedByDate[k]?.length > 0 || noTimeByDate[k]?.length > 0
+          }).length && (
+            <div className="flex flex-col items-center justify-center h-40 text-stone-400 dark:text-stone-500 gap-2">
+              <Clock size={24} strokeWidth={1} className="opacity-40" />
+              <p className="text-xs">当前日期范围内暂无事项</p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
@@ -881,6 +904,24 @@ export default function App() {
     } catch {
       const item: Item = { id: genId(), text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [], repeat: 'none' }
       setCards(prev => prev.map(c => c.id === cardId ? { ...c, items: [...c.items, item] } : c))
+    }
+  }
+
+  const handleTimelineAddItem = (date: string) => {
+    const existing = cards.find(c => c.date === date)
+    if (existing) {
+      handleAddItem(existing.id)
+    } else {
+      const cardId = genId()
+      const itemId = genId()
+      const item: Item = { id: itemId, text: '', description: '', start: '', end: '', done: false, priority: 'none', tags: [], subtasks: [], repeat: 'none' }
+      setCards(prev => [...prev, { id: cardId, title: '', date, items: [item] }])
+      try {
+        invoke<Card>('create_card', { projectId: currentProjectId }).then(c => {
+          invoke('update_card', { id: c.id, date })
+          invoke('create_item', { cardId: c.id })
+        })
+      } catch {}
     }
   }
 
@@ -1277,7 +1318,7 @@ export default function App() {
           </>
         ) : (
           <div className="flex-1 min-h-0">
-            <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} />
+            <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} onTimelineAddItem={handleTimelineAddItem} />
           </div>
         )}
       </div>
