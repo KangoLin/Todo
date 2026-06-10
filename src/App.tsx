@@ -520,18 +520,119 @@ function TaskDetailModal({ card, item, onClose, onUpdate, onDelete }: {
 
 const CARD_COLORS = ['#c45a4a', '#c4904a', '#8aaa5a', '#4a9a8a', '#4a7fc4', '#8a74c4', '#c46a8a', '#6a7a8a']
 
-function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardId: string, itemId: string) => void }) {
-  const HOUR_HEIGHT = 54
+function formatDateLabel(d: string) {
+  const dt = new Date(d)
+  const today = new Date()
+  const label = dt.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })
+  if (dt.toDateString() === today.toDateString()) return label + ' · 今天'
+  const yest = new Date(today); yest.setDate(yest.getDate() - 1)
+  if (dt.toDateString() === yest.toDateString()) return label + ' · 昨天'
+  return label
+}
+
+function TimeGrid({ items, minHour, maxHour, showNow, onOpenItem }: {
+  items: (Item & { cardId: string; cardTitle: string; color: string; startMin: number; endMin: number })[];
+  minHour: number; maxHour: number; showNow: boolean;
+  onOpenItem: (cardId: string, itemId: string) => void;
+}) {
   const now = new Date()
   const nowMin = now.getHours() * 60 + now.getMinutes()
+  const HOUR_HEIGHT = 54
 
-  const items = cards.flatMap((card, ci) =>
+  return (
+    <div className="relative" style={{ height: (maxHour - minHour) * HOUR_HEIGHT + 30 + 'px' }}>
+      <div className="absolute left-0 right-0 top-[15px] bottom-0">
+        {Array.from({ length: maxHour - minHour }, (_, i) => {
+          const hour = minHour + i
+          return (
+            <div key={hour} className="absolute left-0 right-0"
+              style={{ top: i * HOUR_HEIGHT + 'px', height: HOUR_HEIGHT + 'px' }}>
+              <div className="absolute inset-0 border-t border-[var(--border-divider)]/20" />
+              <div className="absolute left-0 right-0 border-t border-dashed border-[var(--border-divider)]/8"
+                style={{ top: '50%' }} />
+              <span className="absolute -top-3 left-0 text-[11px] text-stone-400 dark:text-stone-500 w-10 text-right font-mono tabular-nums">
+                {String(hour).padStart(2, '0')}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {showNow && nowMin >= minHour * 60 && nowMin <= maxHour * 60 && (
+        <div className="absolute left-0 right-0 z-10 pointer-events-none"
+          style={{ top: ((nowMin - minHour * 60) * HOUR_HEIGHT / 60) + 15 + 'px' }}>
+          <div className="flex items-center gap-1 ml-[42px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
+            <span className="h-px flex-1 bg-[var(--accent)]/40" />
+          </div>
+        </div>
+      )}
+
+      <div className="absolute left-[42px] right-0 top-[15px]" style={{ bottom: 0 }}>
+        {items.map((item, _, all) => {
+          const topPx = (item.startMin - minHour * 60) * HOUR_HEIGHT / 60
+          const heightPx = Math.max(item.endMin - item.startMin, 18) * HOUR_HEIGHT / 60
+          const overlaps = all.filter(o =>
+            o.id !== item.id && o.startMin < item.endMin && o.endMin > item.startMin
+          )
+          const col = overlaps.filter(o =>
+            o.startMin < item.startMin || (o.startMin === item.startMin && o.id < item.id)
+          ).length
+          const totalCols = Math.max(...all.map(o => {
+            const ov = all.filter(x => x.id !== o.id && x.startMin < o.endMin && x.endMin > o.startMin)
+            return ov.filter(x => x.startMin < o.startMin || (x.startMin === o.startMin && x.id < o.id)).length + 1
+          }), 1)
+          const gap = totalCols > 1 ? 3 : 0
+          const w = `calc((100% - ${gap * (totalCols - 1)}px) / ${totalCols})`
+
+          return (
+            <div key={item.id}
+              onClick={() => onOpenItem(item.cardId, item.id)}
+              className="absolute rounded-lg cursor-pointer transition-all duration-150 active:scale-[0.97]"
+              style={{
+                top: topPx + 'px',
+                height: heightPx + 'px',
+                left: `calc(${col} * (${w} + ${gap}px))`,
+                width: w,
+              }}>
+              <div className="h-full rounded-lg bg-[var(--bg-surface)]/50 dark:bg-[var(--bg-card-start)]/60 hover:bg-[var(--bg-surface)] dark:hover:bg-[var(--bg-surface)] transition-colors duration-150 overflow-hidden"
+                style={{ borderLeft: `3px solid ${item.color}`, paddingLeft: 0 }}>
+                <div className="flex items-start gap-1.5 px-2.5 py-1 h-full" style={{ marginLeft: '6px' }}>
+                  <span className="w-1 h-1 rounded-full mt-1.5 shrink-0 opacity-60" style={{ backgroundColor: item.color }} />
+                  <div className="min-w-0 flex-1 flex flex-col gap-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[13px] font-medium text-stone-700 dark:text-stone-300 leading-snug truncate">
+                        {item.text || item.cardTitle || '无标题'}
+                      </span>
+                      {item.cardTitle && (
+                        <span className="text-[10px] text-stone-400 dark:text-stone-500 shrink-0 hidden sm:inline">{item.cardTitle}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono tabular-nums">
+                      {item.start}–{item.end}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardId: string, itemId: string) => void }) {
+  const today = new Date().toISOString().slice(0, 10)
+
+  const timedItems = cards.flatMap((card, ci) =>
     card.items
       .filter(it => calcMinutes(it.start, it.end) > 0)
       .map(it => ({
         ...it,
         cardId: card.id,
         cardTitle: card.title,
+        cardDate: card.date,
         color: CARD_COLORS[ci % CARD_COLORS.length],
         startMin: timeToMinutes(it.start),
         endMin: timeToMinutes(it.end),
@@ -544,14 +645,7 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
     }))
   )
 
-  const minHour = items.length
-    ? Math.max(0, Math.floor((Math.min(...items.map(i => i.startMin)) - 30) / 60))
-    : 6
-  const maxHour = items.length
-    ? Math.min(23, Math.ceil((Math.max(...items.map(i => i.endMin)) + 30) / 60))
-    : 22
-
-  if (!items.length && !noTimeItems.length) {
+  if (!timedItems.length && !noTimeItems.length) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-stone-400 dark:text-stone-500 gap-2">
         <Calendar size={32} strokeWidth={1} className="opacity-40" />
@@ -560,105 +654,61 @@ function TimelineView({ cards, onOpenItem }: { cards: Card[]; onOpenItem: (cardI
     )
   }
 
+  const grouped: Record<string, typeof timedItems> = {}
+  timedItems.forEach(it => {
+    const key = it.cardDate || ''
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(it)
+  })
+  const sortedDates = Object.keys(grouped).sort()
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto pr-2">
-        {items.length === 0 ? (
+        {timedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-stone-400 dark:text-stone-500 gap-2">
             <Clock size={24} strokeWidth={1} className="opacity-40" />
             <p className="text-xs">事项尚未设定时间块</p>
           </div>
         ) : (
-          <div className="relative min-h-[200px]" style={{ height: (maxHour - minHour) * HOUR_HEIGHT + 30 + 'px' }}>
-            <div className="absolute left-0 right-0 top-[15px] bottom-0">
-              {Array.from({ length: maxHour - minHour }, (_, i) => {
-                const hour = minHour + i
-                return (
-                  <div key={hour} className="absolute left-0 right-0"
-                    style={{ top: i * HOUR_HEIGHT + 'px', height: HOUR_HEIGHT + 'px' }}>
-                    <div className="absolute inset-0 border-t border-[var(--border-divider)]/20" />
-                    <div className="absolute left-0 right-0 border-t border-dashed border-[var(--border-divider)]/8"
-                      style={{ top: '50%' }} />
-                    <span className="absolute -top-2.5 left-0 text-[10px] text-stone-400 dark:text-stone-500 w-9 text-right font-mono tabular-nums">
-                      {String(hour).padStart(2, '0')}
+          <div className="space-y-6">
+            {sortedDates.map(dateKey => {
+              const dateItems = grouped[dateKey]
+              const allStart = dateItems.map(i => i.startMin)
+              const allEnd = dateItems.map(i => i.endMin)
+              const minHour = Math.max(0, Math.floor((Math.min(...allStart) - 30) / 60))
+              const maxHour = Math.min(23, Math.ceil((Math.max(...allEnd) + 30) / 60))
+
+              return (
+                <div key={dateKey}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 tracking-wide uppercase">
+                      {dateKey ? formatDateLabel(dateKey) : '未设定日期'}
                     </span>
+                    <div className="flex-1 border-t border-[var(--border-divider)]/15" />
                   </div>
-                )
-              })}
-            </div>
-
-            {nowMin >= minHour * 60 && nowMin <= maxHour * 60 && (
-              <div className="absolute left-0 right-0 z-10 pointer-events-none"
-                style={{ top: ((nowMin - minHour * 60) * HOUR_HEIGHT / 60) + 15 + 'px' }}>
-                <div className="flex items-center gap-1 ml-9">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)]" />
-                  <span className="h-px flex-1 bg-[var(--accent)]/40" />
+                  <TimeGrid
+                    items={dateItems}
+                    minHour={minHour}
+                    maxHour={maxHour}
+                    showNow={dateKey === today}
+                    onOpenItem={onOpenItem}
+                  />
                 </div>
-              </div>
-            )}
-
-            <div className="absolute left-9 right-0 top-[15px]" style={{ bottom: 0 }}>
-              {items.map((item, _, all) => {
-                const topPx = (item.startMin - minHour * 60) * HOUR_HEIGHT / 60
-                const heightPx = Math.max(item.endMin - item.startMin, 18) * HOUR_HEIGHT / 60
-                const overlaps = all.filter(o =>
-                  o.id !== item.id && o.startMin < item.endMin && o.endMin > item.startMin
-                )
-                const col = overlaps.filter(o =>
-                  o.startMin < item.startMin || (o.startMin === item.startMin && o.id < item.id)
-                ).length
-                const totalCols = Math.max(...all.map(o => {
-                  const ov = all.filter(x => x.id !== o.id && x.startMin < o.endMin && x.endMin > o.startMin)
-                  return ov.filter(x => x.startMin < o.startMin || (x.startMin === o.startMin && x.id < o.id)).length + 1
-                }), 1)
-                const gap = totalCols > 1 ? 3 : 0
-                const w = `calc((100% - ${gap * (totalCols - 1)}px) / ${totalCols})`
-
-                return (
-                  <div key={item.id}
-                    onClick={() => onOpenItem(item.cardId, item.id)}
-                    className="absolute rounded-lg cursor-pointer transition-all duration-150 active:scale-[0.97]"
-                    style={{
-                      top: topPx + 'px',
-                      height: heightPx + 'px',
-                      left: `calc(${col} * (${w} + ${gap}px))`,
-                      width: w,
-                    }}>
-                    <div className="h-full rounded-lg bg-[var(--bg-surface)]/50 dark:bg-[var(--bg-card-start)]/60 hover:bg-[var(--bg-surface)] dark:hover:bg-[var(--bg-surface)] transition-colors duration-150 overflow-hidden"
-                      style={{ borderLeft: `3px solid ${item.color}`, paddingLeft: 0 }}>
-                      <div className="flex items-start gap-1.5 px-2 py-1 h-full" style={{ marginLeft: '6px' }}>
-                        <span className="w-1 h-1 rounded-full mt-1.5 shrink-0 opacity-60" style={{ backgroundColor: item.color }} />
-                        <div className="min-w-0 flex-1 flex items-baseline gap-1.5">
-                          <span className="text-[12px] font-medium text-stone-700 dark:text-stone-300 leading-tight truncate">
-                            {item.text || item.cardTitle || '无标题'}
-                          </span>
-                          <span className="text-[9px] text-stone-400 dark:text-stone-500 font-mono whitespace-nowrap tabular-nums">
-                            {item.start}–{item.end}
-                          </span>
-                          {item.cardTitle && (
-                            <span className="text-[9px] text-stone-400 dark:text-stone-500 hidden sm:inline shrink-0 ml-auto">
-                              {item.cardTitle}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+              )
+            })}
           </div>
         )}
 
         {noTimeItems.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-[var(--border-divider)]/20">
-            <div className="text-[10px] text-stone-400 dark:text-stone-500 mb-1.5 font-medium">未设定时间</div>
+          <div className="mt-4 pt-3 border-t border-[var(--border-divider)]/20">
+            <div className="text-[11px] text-stone-400 dark:text-stone-500 mb-2 font-medium">未设定时间</div>
             <div className="space-y-0.5">
               {noTimeItems.map(it => (
                 <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
-                  className="w-full text-left flex items-center gap-2 px-2 py-1 text-xs rounded-lg hover:bg-[var(--bg-surface)] transition-colors active:scale-[0.98] text-stone-600 dark:text-stone-400">
+                  className="w-full text-left flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)] transition-colors active:scale-[0.98] text-stone-600 dark:text-stone-400">
                   <span className="w-1.5 h-1.5 rounded-full shrink-0 opacity-60" style={{ backgroundColor: it.color }} />
-                  <span className="truncate">{it.text}</span>
+                  <span className="truncate">{it.text || it.cardTitle || '无标题'}</span>
                   {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 ml-auto text-[10px]">{it.cardTitle}</span>}
                 </button>
               ))}
