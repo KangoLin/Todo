@@ -10,6 +10,14 @@ pub struct Tag {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProjectTag {
+    pub id: String,
+    pub project_id: String,
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Subtask {
     pub id: String,
     pub text: String,
@@ -104,6 +112,16 @@ impl Database {
         conn.execute_batch("ALTER TABLE items ADD COLUMN subtasks TEXT NOT NULL DEFAULT '[]'").ok();
         conn.execute_batch("ALTER TABLE cards ADD COLUMN project_id TEXT NOT NULL DEFAULT ''").ok();
         conn.execute_batch("ALTER TABLE items ADD COLUMN repeat TEXT NOT NULL DEFAULT 'none'").ok();
+        conn.execute_batch("
+            CREATE TABLE IF NOT EXISTS project_tags (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL DEFAULT '#3e7ae0',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(project_id, name)
+            );
+        ").ok();
         conn.execute_batch("
             CREATE TABLE IF NOT EXISTS pomodoro_sessions (
                 id TEXT PRIMARY KEY,
@@ -220,6 +238,45 @@ pub fn reorder_projects(db: tauri::State<'_, Database>, ids: Vec<String>) -> Res
         conn.execute("UPDATE projects SET sort_order = ?1 WHERE id = ?2", params![i as i32, id])
             .map_err(|e| e.to_string())?;
     }
+    Ok(())
+}
+
+// ── Tag commands ──
+
+#[tauri::command]
+pub fn get_project_tags(db: tauri::State<'_, Database>, project_id: String) -> Result<Vec<ProjectTag>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, project_id, name, color FROM project_tags WHERE project_id = ?1 ORDER BY created_at"
+    ).map_err(|e| e.to_string())?;
+    let tags = stmt.query_map(params![project_id], |row| {
+        Ok(ProjectTag {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            name: row.get(2)?,
+            color: row.get(3)?,
+        })
+    }).map_err(|e| e.to_string())?
+    .collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    Ok(tags)
+}
+
+#[tauri::command]
+pub fn create_project_tag(db: tauri::State<'_, Database>, project_id: String, name: String, color: String) -> Result<ProjectTag, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let id = Uuid::new_v4().to_string();
+    conn.execute(
+        "INSERT INTO project_tags (id, project_id, name, color) VALUES (?1, ?2, ?3, ?4)",
+        params![id, project_id, name, color],
+    ).map_err(|e| e.to_string())?;
+    Ok(ProjectTag { id, project_id, name, color })
+}
+
+#[tauri::command]
+pub fn delete_project_tag(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM project_tags WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 

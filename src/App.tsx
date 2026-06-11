@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, Clock, X, Trash2, GripVertical, Calendar, Search, Check, ChevronDown, Moon, Sun, Download, Upload, LayoutGrid, CalendarDays, FolderKanban, Edit3, CheckCheck, BarChart3, Timer, Play, Pause, RotateCcw } from 'lucide-react'
+import { Plus, Clock, X, Trash2, GripVertical, Calendar, Search, Check, ChevronDown, Moon, Sun, Download, Upload, LayoutGrid, CalendarDays, Edit3, BarChart3, Timer, Play, Pause, RotateCcw } from 'lucide-react'
 import DescriptionEditor from './components/DescriptionEditor'
 
 interface Tag {
@@ -39,6 +39,172 @@ interface Project {
   name: string
   color: string
   sort_order: number
+}
+
+interface ProjectTag {
+  id: string
+  project_id: string
+  name: string
+  color: string
+}
+
+function hexToRgb(hex: string): string {
+  const v = parseInt(hex.replace('#', ''), 16)
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255].join(', ')
+}
+
+function darken(hex: string, amt: number): string {
+  const v = parseInt(hex.replace('#', ''), 16)
+  const r = Math.max((v >> 16) - amt, 0)
+  const g = Math.max(((v >> 8) & 255) - amt, 0)
+  const b = Math.max((v & 255) - amt, 0)
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')
+}
+
+interface ThemePreset {
+  id: string
+  label: string
+  accent: string
+  light: Record<string, string>
+  dark: Record<string, string>
+}
+
+const THEME_PRESETS: ThemePreset[] = [
+  {
+    id: 'terracotta', label: '陶土',
+    accent: '#c2410c',
+    light: {
+      '--bg-page': '#f2ece4', '--bg-page-to': '#e2d6c9',
+      '--bg-card-start': '#ffffff', '--bg-surface': '#f3ede8', '--bg-surface-hover': '#faf7f5',
+      '--border-card': '#e0d8ce', '--border-item': '#e8e0d9', '--border-dashed': '#ddd5cc', '--border-divider': '#d6d3d1', '--border-time': 'rgba(168,162,158,0.38)',
+      '--text-primary': '#292524', '--text-secondary': '#78716c', '--text-muted': '#a8a29e', '--text-dim': '#d6d3d1', '--text-placeholder': '#a8a29e',
+      '--input-bg': '#ffffff', '--time-bg': 'rgba(255,255,255,0.8)', '--time-text': '#57534e',
+      '--grip': '#a8a29e', '--shadow-rgb': '160,130,100',
+      '--bg-done': '#fff1f2', '--bg-done-hover': '#ffe4e6', '--border-done': '#fecdd3', '--border-done-accent': '#fda4af',
+      '--rose-50': '#fff1f2', '--rose-100': '#ffe4e6', '--rose-200': '#fecdd3', '--rose-300': '#fda4af',
+    },
+    dark: {
+      '--bg-page': '#0b0d14', '--bg-page-to': '#0f111a',
+      '--bg-card-start': '#141723', '--bg-surface': '#1c1f2d', '--bg-surface-hover': '#232638',
+      '--border-card': '#1e2233', '--border-item': '#1e2233', '--border-dashed': '#282c3f', '--border-divider': '#282c3f', '--border-time': 'rgba(40,44,63,0.6)',
+      '--text-primary': '#e2e5ee', '--text-secondary': '#949aaf', '--text-muted': '#696f88', '--text-dim': '#404562', '--text-placeholder': '#404562',
+      '--input-bg': '#141723', '--time-bg': 'rgba(20,23,39,0.7)', '--time-text': '#949aaf',
+      '--grip': '#404562', '--shadow-rgb': '0,2,24',
+      '--bg-done': '#110f24', '--bg-done-hover': '#181533', '--border-done': '#292152', '--border-done-accent': '#4a3a8a',
+      '--rose-50': '#110f24', '--rose-100': '#181533', '--rose-200': '#292152', '--rose-300': '#4a3a8a',
+    },
+  },
+  {
+    id: 'ocean', label: '海洋',
+    accent: '#2563eb',
+    light: {
+      '--bg-page': '#eff6ff', '--bg-page-to': '#dbeafe',
+      '--bg-card-start': '#ffffff', '--bg-surface': '#f0f5ff', '--bg-surface-hover': '#f8faff',
+      '--border-card': '#d4e0f0', '--border-item': '#dce6f2', '--border-dashed': '#d4e0f0', '--border-divider': '#c8d6e8', '--border-time': 'rgba(100,140,180,0.3)',
+      '--text-primary': '#1e293b', '--text-secondary': '#64748b', '--text-muted': '#94a3b8', '--text-dim': '#cbd5e1', '--text-placeholder': '#94a3b8',
+      '--input-bg': '#ffffff', '--time-bg': 'rgba(255,255,255,0.8)', '--time-text': '#475569',
+      '--grip': '#94a3b8', '--shadow-rgb': '100,140,180',
+      '--bg-done': '#f0fdf4', '--bg-done-hover': '#dcfce7', '--border-done': '#bbf7d0', '--border-done-accent': '#86efac',
+      '--rose-50': '#f0fdf4', '--rose-100': '#dcfce7', '--rose-200': '#bbf7d0', '--rose-300': '#86efac',
+    },
+    dark: {
+      '--bg-page': '#0c1222', '--bg-page-to': '#10182e',
+      '--bg-card-start': '#141e33', '--bg-surface': '#1a2640', '--bg-surface-hover': '#1f2e4d',
+      '--border-card': '#1e2d4a', '--border-item': '#1e2d4a', '--border-dashed': '#263858', '--border-divider': '#263858', '--border-time': 'rgba(30,45,74,0.6)',
+      '--text-primary': '#dce6f2', '--text-secondary': '#8a9fc0', '--text-muted': '#5e7aa0', '--text-dim': '#3a5070', '--text-placeholder': '#3a5070',
+      '--input-bg': '#141e33', '--time-bg': 'rgba(20,30,51,0.7)', '--time-text': '#8a9fc0',
+      '--grip': '#3a5070', '--shadow-rgb': '0,8,32',
+      '--bg-done': '#0a1f10', '--bg-done-hover': '#0f2a18', '--border-done': '#1a4030', '--border-done-accent': '#2a6050',
+      '--rose-50': '#0a1f10', '--rose-100': '#0f2a18', '--rose-200': '#1a4030', '--rose-300': '#2a6050',
+    },
+  },
+  {
+    id: 'forest', label: '森林',
+    accent: '#059669',
+    light: {
+      '--bg-page': '#ecfdf5', '--bg-page-to': '#d1fae5',
+      '--bg-card-start': '#ffffff', '--bg-surface': '#f0faf4', '--bg-surface-hover': '#f6fdf8',
+      '--border-card': '#c8e6d6', '--border-item': '#d4ede0', '--border-dashed': '#c8e6d6', '--border-divider': '#b8dccc', '--border-time': 'rgba(80,160,120,0.3)',
+      '--text-primary': '#1a2e1a', '--text-secondary': '#4a7a5a', '--text-muted': '#7aaa8a', '--text-dim': '#b8dccc', '--text-placeholder': '#7aaa8a',
+      '--input-bg': '#ffffff', '--time-bg': 'rgba(255,255,255,0.8)', '--time-text': '#3a6a4a',
+      '--grip': '#7aaa8a', '--shadow-rgb': '80,140,100',
+      '--bg-done': '#fef2f2', '--bg-done-hover': '#fee2e2', '--border-done': '#fecaca', '--border-done-accent': '#fca5a5',
+      '--rose-50': '#fef2f2', '--rose-100': '#fee2e2', '--rose-200': '#fecaca', '--rose-300': '#fca5a5',
+    },
+    dark: {
+      '--bg-page': '#0a1a12', '--bg-page-to': '#0e2218',
+      '--bg-card-start': '#12241a', '--bg-surface': '#182e22', '--bg-surface-hover': '#1d382a',
+      '--border-card': '#1e3a2a', '--border-item': '#1e3a2a', '--border-dashed': '#264a34', '--border-divider': '#264a34', '--border-time': 'rgba(30,58,42,0.6)',
+      '--text-primary': '#d4ede0', '--text-secondary': '#7ab08a', '--text-muted': '#4a8a5a', '--text-dim': '#2a5a3a', '--text-placeholder': '#2a5a3a',
+      '--input-bg': '#12241a', '--time-bg': 'rgba(18,36,26,0.7)', '--time-text': '#7ab08a',
+      '--grip': '#2a5a3a', '--shadow-rgb': '0,24,16',
+      '--bg-done': '#1f0a0a', '--bg-done-hover': '#2a1010', '--border-done': '#3a1a1a', '--border-done-accent': '#5a2a2a',
+      '--rose-50': '#1f0a0a', '--rose-100': '#2a1010', '--rose-200': '#3a1a1a', '--rose-300': '#5a2a2a',
+    },
+  },
+  {
+    id: 'twilight', label: '暮色',
+    accent: '#7c3aed',
+    light: {
+      '--bg-page': '#f5f3ff', '--bg-page-to': '#ede9fe',
+      '--bg-card-start': '#ffffff', '--bg-surface': '#f4f0ff', '--bg-surface-hover': '#faf8ff',
+      '--border-card': '#dad4f0', '--border-item': '#e2dcf2', '--border-dashed': '#dad4f0', '--border-divider': '#cec8e8', '--border-time': 'rgba(140,120,180,0.3)',
+      '--text-primary': '#1e1b2e', '--text-secondary': '#6b5a8a', '--text-muted': '#9a8aba', '--text-dim': '#ccc0e0', '--text-placeholder': '#9a8aba',
+      '--input-bg': '#ffffff', '--time-bg': 'rgba(255,255,255,0.8)', '--time-text': '#4a3a6a',
+      '--grip': '#9a8aba', '--shadow-rgb': '120,100,160',
+      '--bg-done': '#f0fdf4', '--bg-done-hover': '#dcfce7', '--border-done': '#bbf7d0', '--border-done-accent': '#86efac',
+      '--rose-50': '#f0fdf4', '--rose-100': '#dcfce7', '--rose-200': '#bbf7d0', '--rose-300': '#86efac',
+    },
+    dark: {
+      '--bg-page': '#0e0a1a', '--bg-page-to': '#141026',
+      '--bg-card-start': '#16142e', '--bg-surface': '#1e1a38', '--bg-surface-hover': '#262246',
+      '--border-card': '#24204a', '--border-item': '#24204a', '--border-dashed': '#2e2a58', '--border-divider': '#2e2a58', '--border-time': 'rgba(36,32,74,0.6)',
+      '--text-primary': '#dad4f0', '--text-secondary': '#8a7ab0', '--text-muted': '#5a4a80', '--text-dim': '#3a2a60', '--text-placeholder': '#3a2a60',
+      '--input-bg': '#16142e', '--time-bg': 'rgba(22,20,46,0.7)', '--time-text': '#8a7ab0',
+      '--grip': '#3a2a60', '--shadow-rgb': '8,0,32',
+      '--bg-done': '#0a1f10', '--bg-done-hover': '#0f2a18', '--border-done': '#1a4030', '--border-done-accent': '#2a6050',
+      '--rose-50': '#0a1f10', '--rose-100': '#0f2a18', '--rose-200': '#1a4030', '--rose-300': '#2a6050',
+    },
+  },
+  {
+    id: 'slate', label: '石板',
+    accent: '#78716c',
+    light: {
+      '--bg-page': '#f8fafc', '--bg-page-to': '#f1f5f9',
+      '--bg-card-start': '#ffffff', '--bg-surface': '#f4f6f8', '--bg-surface-hover': '#fafbfc',
+      '--border-card': '#d4d8e0', '--border-item': '#dce0e8', '--border-dashed': '#d4d8e0', '--border-divider': '#c8cce0', '--border-time': 'rgba(120,130,150,0.3)',
+      '--text-primary': '#1e293b', '--text-secondary': '#64748b', '--text-muted': '#94a3b8', '--text-dim': '#cbd5e1', '--text-placeholder': '#94a3b8',
+      '--input-bg': '#ffffff', '--time-bg': 'rgba(255,255,255,0.8)', '--time-text': '#475569',
+      '--grip': '#94a3b8', '--shadow-rgb': '100,120,140',
+      '--bg-done': '#f0fdf4', '--bg-done-hover': '#dcfce7', '--border-done': '#bbf7d0', '--border-done-accent': '#86efac',
+      '--rose-50': '#f0fdf4', '--rose-100': '#dcfce7', '--rose-200': '#bbf7d0', '--rose-300': '#86efac',
+    },
+    dark: {
+      '--bg-page': '#0a0c10', '--bg-page-to': '#0e1018',
+      '--bg-card-start': '#131620', '--bg-surface': '#1a1d2a', '--bg-surface-hover': '#202436',
+      '--border-card': '#1e2230', '--border-item': '#1e2230', '--border-dashed': '#262a3e', '--border-divider': '#262a3e', '--border-time': 'rgba(30,34,48,0.6)',
+      '--text-primary': '#dce0e8', '--text-secondary': '#8a90a0', '--text-muted': '#5a6070', '--text-dim': '#3a3e50', '--text-placeholder': '#3a3e50',
+      '--input-bg': '#131620', '--time-bg': 'rgba(19,22,32,0.7)', '--time-text': '#8a90a0',
+      '--grip': '#3a3e50', '--shadow-rgb': '0,2,16',
+      '--bg-done': '#0a1f10', '--bg-done-hover': '#0f2a18', '--border-done': '#1a4030', '--border-done-accent': '#2a6050',
+      '--rose-50': '#0a1f10', '--rose-100': '#0f2a18', '--rose-200': '#1a4030', '--rose-300': '#2a6050',
+    },
+  },
+]
+
+function applyTheme(presetId: string, accent: string, isDark: boolean) {
+  const preset = THEME_PRESETS.find(p => p.id === presetId) || THEME_PRESETS[0]
+  const vars = isDark ? preset.dark : preset.light
+  const root = document.documentElement
+  for (const [key, val] of Object.entries(vars)) {
+    root.style.setProperty(key, val)
+  }
+  const rgb = hexToRgb(accent)
+  root.style.setProperty('--accent', accent)
+  root.style.setProperty('--accent-from', darken(accent, 18))
+  root.style.setProperty('--accent-rgb', rgb)
+  root.style.setProperty('--accent-muted', `rgba(${rgb}, 0.85)`)
+  root.style.setProperty('--accent-focus', `rgba(${rgb}, 0.08)`)
 }
 
 function calcMinutes(start: string, end: string): number {
@@ -293,9 +459,10 @@ function NoteCard({
   )
 }
 
-function TaskDetailModal({ card, item, onClose, onUpdate, onDelete }: {
+function TaskDetailModal({ card, item, projectTags, onClose, onUpdate, onDelete }: {
   card: Card
   item: Item
+  projectTags: ProjectTag[]
   onClose: () => void
   onUpdate: (cardId: string, itemId: string, field: keyof Item, value: unknown) => void
   onDelete: (cardId: string, itemId: string) => void
@@ -443,7 +610,7 @@ function TaskDetailModal({ card, item, onClose, onUpdate, onDelete }: {
               value={tagInput}
               onChange={e => setTagInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') addTag() }}
-              placeholder="新标签名称..."
+              placeholder="标签名称..."
               className="flex-1 text-xs bg-transparent border border-stone-300 dark:border-stone-600 rounded-lg px-2.5 py-1.5 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 placeholder-stone-400 dark:placeholder-stone-500"
             />
             <div className="flex gap-0.5">
@@ -458,6 +625,17 @@ function TaskDetailModal({ card, item, onClose, onUpdate, onDelete }: {
               <Plus size={16} />
             </button>
           </div>
+          {projectTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-[var(--border-divider)]/30">
+              {projectTags.filter(pt => !item.tags.some(t => t.name === pt.name)).map(pt => (
+                <button key={pt.id} onClick={() => onUpdate(card.id, item.id, 'tags', [...item.tags, { name: pt.name, color: pt.color }])}
+                  className="text-[10px] px-2 py-0.5 rounded-full border border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-all active:scale-[0.95]"
+                  style={{ borderColor: pt.color + '40' }}>
+                  +{pt.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mb-5">
@@ -679,7 +857,7 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto pr-2">
-        <div className="space-y-4">
+        <div className="bg-[var(--bg-surface)]/30 dark:bg-[var(--bg-card-start)]/40 rounded-xl border border-[var(--border-item)]/15 p-3 sm:p-4 space-y-5">
           {sortedDates.map(dateKey => {
             const hasTimed = timedByDate[dateKey]?.length > 0
             const hasNoTime = noTimeByDate[dateKey]?.length > 0
@@ -687,46 +865,52 @@ function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
 
             return (
               <div key={dateKey}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full bg-[var(--accent)]/30 shrink-0" />
-                  <button onClick={() => onTimelineAddItem(dateKey)}
-                    className="shrink-0 w-5 h-5 rounded-full border border-dashed border-[var(--border-divider)]/30 hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/5 text-stone-400 hover:text-[var(--accent)] flex items-center justify-center transition-all active:scale-[0.9]">
-                    <Plus size={12} strokeWidth={2} />
-                  </button>
-                  <span className="text-xs font-medium text-stone-500 dark:text-stone-400 tracking-wide">
+                {/* 日期刻度线 — 横跨整个面板 */}
+                <div className="flex items-center gap-2 -mx-3 sm:-mx-4 px-3 sm:px-4 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent)] shrink-0" />
+                  <span className="text-xs font-semibold text-stone-600 dark:text-stone-300 tracking-wide shrink-0">
                     {dateKey ? formatDateLabel(dateKey) : '未设定日期'}
                   </span>
-                  <div className="flex-1 border-t border-[var(--border-divider)]/10" />
+                  <button onClick={() => onTimelineAddItem(dateKey)}
+                    className="shrink-0 w-5 h-5 rounded-full border border-dashed border-stone-300 dark:border-stone-600 hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 text-stone-400 hover:text-[var(--accent)] flex items-center justify-center transition-all active:scale-[0.9]">
+                    <Plus size={12} strokeWidth={2} />
+                  </button>
+                  <div className="flex-1 border-t-2 border-stone-300 dark:border-stone-600" />
                 </div>
 
-                {hasTimed && (() => {
-                  const dateItems = timedByDate[dateKey]
-                  const allStart = dateItems.map(i => i.startMin)
-                  const allEnd = dateItems.map(i => i.endMin)
-                  const minHour = Math.max(0, Math.floor((Math.min(...allStart) - 30) / 60))
-                  const maxHour = Math.min(23, Math.ceil((Math.max(...allEnd) + 30) / 60))
-                  return (
-                    <TimeGrid
-                      items={dateItems}
-                      minHour={minHour}
-                      maxHour={maxHour}
-                      showNow={dateKey === today}
-                      onOpenItem={onOpenItem}
-                      onUpdateItem={onUpdateItem}
-                    />
-                  )
-                })()}
+                {/* 任务边界框 */}
+                {(hasTimed || hasNoTime) && (
+                  <div className="border-2 border-stone-300 dark:border-stone-600 bg-white/40 dark:bg-stone-800/40 rounded-lg p-2">
+                    {hasTimed && (() => {
+                      const dateItems = timedByDate[dateKey]
+                      const allStart = dateItems.map(i => i.startMin)
+                      const allEnd = dateItems.map(i => i.endMin)
+                      const minHour = Math.max(0, Math.floor((Math.min(...allStart) - 30) / 60))
+                      const maxHour = Math.min(23, Math.ceil((Math.max(...allEnd) + 30) / 60))
+                      return (
+                        <TimeGrid
+                          items={dateItems}
+                          minHour={minHour}
+                          maxHour={maxHour}
+                          showNow={dateKey === today}
+                          onOpenItem={onOpenItem}
+                          onUpdateItem={onUpdateItem}
+                        />
+                      )
+                    })()}
 
-                {hasNoTime && (
-                  <div className={hasTimed ? 'mt-2 space-y-0.5' : 'space-y-0.5'}>
-                    {noTimeByDate[dateKey].map(it => (
-                      <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
-                        className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)]/20 border-b border-[var(--border-divider)]/8 transition-colors active:scale-[0.98]"
-                        style={{ borderLeft: `2px solid ${it.color}`, paddingLeft: '10px' }}>
-                        <span className="truncate flex-1 text-stone-600 dark:text-stone-400">{it.text || it.cardTitle || '无标题'}</span>
-                        {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 text-[10px]">{it.cardTitle}</span>}
-                      </button>
-                    ))}
+                    {hasNoTime && (
+                      <div className={hasTimed ? 'mt-2 space-y-0.5' : 'space-y-0.5'}>
+                        {noTimeByDate[dateKey].map(it => (
+                          <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
+                            className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)]/20 transition-colors active:scale-[0.98]"
+                            style={{ borderLeft: `2px solid ${it.color}`, paddingLeft: '10px' }}>
+                            <span className="truncate flex-1 text-stone-600 dark:text-stone-400">{it.text || it.cardTitle || '无标题'}</span>
+                            {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 text-[10px]">{it.cardTitle}</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -761,6 +945,9 @@ export default function App() {
     if (saved) return saved === 'dark'
     return window.matchMedia('(prefers-color-scheme: dark)').matches
   })
+  const [themePreset, setThemePreset] = useState(() => localStorage.getItem('themePreset') || 'terracotta')
+  const [accentColor, setAccentColor] = useState(() => localStorage.getItem('accentColor') || '#c2410c')
+  const [showThemePicker, setShowThemePicker] = useState(false)
   const dragCardIdx = useRef<string | null>(null)
   const cardsRef = useRef(cards)
   cardsRef.current = cards
@@ -771,7 +958,10 @@ export default function App() {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [currentProjectId, setCurrentProjectId] = useState<string>('')
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [projectTags, setProjectTags] = useState<ProjectTag[]>([])
+  const [showTagManager, setShowTagManager] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#3e7ae0')
   const [renamingProject, setRenamingProject] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -803,7 +993,8 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
     localStorage.setItem('theme', dark ? 'dark' : 'light')
-  }, [dark])
+    applyTheme(themePreset, accentColor, dark)
+  }, [dark, themePreset, accentColor])
 
   useEffect(() => {
     const backup = () => { invoke('manual_backup').catch(() => {}) }
@@ -827,6 +1018,7 @@ export default function App() {
   useEffect(() => {
     if (!currentProjectId) return
     loadCards(currentProjectId)
+    loadProjectTags(currentProjectId)
   }, [currentProjectId])
 
   useEffect(() => {
@@ -1084,7 +1276,30 @@ export default function App() {
   const switchProject = (id: string) => {
     setCurrentProjectId(id)
     localStorage.setItem('currentProjectId', id)
-    setProjectMenuOpen(false)
+  }
+
+  const loadProjectTags = async (projectId: string) => {
+    try {
+      const tags = await invoke<ProjectTag[]>('get_project_tags', { projectId })
+      setProjectTags(tags)
+    } catch {}
+  }
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return
+    try {
+      const tag = await invoke<ProjectTag>('create_project_tag', { projectId: currentProjectId, name: newTagName.trim(), color: newTagColor })
+      setProjectTags(prev => [...prev, tag])
+      setNewTagName('')
+      setNewTagColor('#3e7ae0')
+    } catch {}
+  }
+
+  const handleDeleteTag = async (id: string) => {
+    try {
+      await invoke('delete_project_tag', { id })
+      setProjectTags(prev => prev.filter(t => t.id !== id))
+    } catch {}
   }
 
   const filteredCards = cards.filter(card => {
@@ -1108,223 +1323,314 @@ export default function App() {
   }, [searchQuery])
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-b from-[var(--bg-page)] to-[var(--bg-page-to)] flex flex-col p-6">
-      <div className="shrink-0 flex items-center gap-2 mb-5 bg-[var(--bg-surface)]/40 backdrop-blur-sm rounded-xl px-3 py-2 border border-[var(--border-item)]/40">
-        {/* Project switcher */}
-        <div className="relative">
-          <button onClick={() => setProjectMenuOpen(!projectMenuOpen)}
-            className="flex items-center gap-2 px-2.5 py-1.5 text-sm font-medium rounded-lg hover:bg-[var(--bg-surface)] transition-all active:scale-[0.97]"
-            style={{ borderLeft: `3px solid ${projects.find(p => p.id === currentProjectId)?.color || 'var(--accent)'}` }}>
-            <FolderKanban size={14} style={{ color: projects.find(p => p.id === currentProjectId)?.color || 'var(--accent)' }} />
-            <span className="text-stone-700 dark:text-stone-300">{projects.find(p => p.id === currentProjectId)?.name || '加载中...'}</span>
-            <ChevronDown size={12} className="text-stone-400 dark:text-stone-500" />
-          </button>
-          {projectMenuOpen && (
-            <div className="absolute top-full left-0 mt-1 min-w-[220px] bg-white dark:bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-xl shadow-[0_8px_32px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] z-50 py-1 animate-fade-in overflow-hidden">
-              {projects.map(p => (
-                <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] transition-colors group">
-                  <button onClick={() => switchProject(p.id)} className="flex items-center gap-2 flex-1 text-left text-sm text-stone-700 dark:text-stone-300 min-w-0">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                    {renamingProject === p.id ? (
-                      <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
-                        onBlur={() => handleRenameProject(p.id)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleRenameProject(p.id); if (e.key === 'Escape') setRenamingProject(null) }}
-                        className="flex-1 text-sm bg-transparent border-b border-[var(--accent)] outline-none px-0 py-0 text-stone-700 dark:text-stone-300 min-w-0"
-                        onClick={e => e.stopPropagation()} />
-                    ) : (
-                      <span className="truncate flex-1">{p.name}</span>
-                    )}
-                    {currentProjectId === p.id && <CheckCheck size={12} className="text-[var(--accent)] shrink-0" />}
-                  </button>
-                  <button onClick={() => { setRenamingProject(p.id); setRenameValue(p.name) }}
-                    className="opacity-0 group-hover:opacity-100 text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] transition-all p-0.5 shrink-0">
-                    <Edit3 size={12} />
-                  </button>
-                  <button onClick={() => handleDeleteProject(p.id)}
-                    className="opacity-0 group-hover:opacity-100 text-stone-400 dark:text-stone-500 hover:text-red-500 transition-all p-0.5 shrink-0">
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-              <div className="border-t border-[var(--border-divider)]/40 mt-1 pt-1">
-                {showCreateForm ? (
-                  <div className="px-3 py-2 space-y-2" onClick={e => e.stopPropagation()}>
-                    <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(newProjectName, newProjectColor); if (e.key === 'Escape') { setShowCreateForm(false); setNewProjectName('') } }}
-                      placeholder="项目名称..."
-                      className="w-full text-sm bg-[var(--bg-surface)] border border-[var(--border-item)] rounded-lg px-2.5 py-1.5 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 placeholder-stone-400 dark:placeholder-stone-500 transition-colors" />
-                    <div className="flex items-center gap-1.5">
-                      {PROJECT_COLORS.map(c => (
-                        <button key={c} onClick={() => setNewProjectColor(c)}
-                          className={'w-5 h-5 rounded-full transition-all ' + (newProjectColor === c ? 'ring-2 ring-offset-1 ring-stone-400 dark:ring-offset-stone-800 scale-110' : 'ring-0 hover:scale-110')}
-                          style={{ backgroundColor: c }} />
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-1.5 pt-1">
-                      <button onClick={() => handleCreateProject(newProjectName, newProjectColor)}
-                        className="flex-1 text-xs font-semibold bg-[var(--accent)] text-white rounded-lg px-3 py-1.5 hover:brightness-110 transition-all active:scale-[0.95]">
-                        创建
-                      </button>
-                      <button onClick={() => { setShowCreateForm(false); setNewProjectName('') }}
-                        className="flex-1 text-xs font-semibold bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400 rounded-lg px-3 py-1.5 hover:bg-stone-200 dark:hover:bg-stone-600 transition-all active:scale-[0.95]">
-                        取消
-                      </button>
-                    </div>
-                  </div>
+    <div className="min-h-[100dvh] bg-gradient-to-b from-[var(--bg-page)] to-[var(--bg-page-to)] flex p-6 gap-4">
+      {/* Sidebar */}
+      <div className="w-60 shrink-0 bg-[var(--bg-surface)]/40 backdrop-blur-sm rounded-xl border border-[var(--border-item)]/40 p-3 flex flex-col overflow-y-auto">
+        {/* App title */}
+        <div className="flex items-center gap-2 px-2 py-3 mb-2">
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[var(--accent-from)] to-[var(--accent)] flex items-center justify-center text-white text-xs font-bold">
+            T
+          </div>
+          <span className="text-sm font-bold text-stone-700 dark:text-stone-300">Todo土豆</span>
+        </div>
+
+        {/* Project list */}
+        <div className="space-y-0.5 mb-2">
+          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">项目</div>
+          {projects.map(p => (
+            <div key={p.id}
+              className={'flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all group ' + (currentProjectId === p.id ? 'bg-[var(--accent)]/8 text-[var(--accent)]' : 'hover:bg-[var(--bg-surface)] text-stone-600 dark:text-stone-400')}>
+              <button onClick={() => switchProject(p.id)}
+                className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                <span className={'w-2 h-2 rounded-full shrink-0 ' + (currentProjectId === p.id ? 'scale-125 ring-2 ring-offset-1 ring-[var(--accent)]/20' : '')} style={{ backgroundColor: p.color }} />
+                {renamingProject === p.id ? (
+                  <input autoFocus value={renameValue} onChange={e => setRenameValue(e.target.value)}
+                    onBlur={() => handleRenameProject(p.id)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleRenameProject(p.id); if (e.key === 'Escape') setRenamingProject(null) }}
+                    className="flex-1 text-xs bg-transparent border-b border-[var(--accent)] outline-none px-0 py-0 min-w-[40px]"
+                    onClick={e => e.stopPropagation()} />
                 ) : (
-                  <button onClick={() => setShowCreateForm(true)}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] transition-colors">
-                    <Plus size={14} /> 新建项目
-                  </button>
+                  <span className="truncate text-xs font-medium">{p.name}</span>
                 )}
+              </button>
+              <button onClick={e => { e.stopPropagation(); setRenamingProject(p.id); setRenameValue(p.name) }}
+                className="opacity-0 group-hover:opacity-100 hover:text-[var(--accent)] transition-all p-0.5 shrink-0">
+                <Edit3 size={10} />
+              </button>
+              <button onClick={e => { e.stopPropagation(); handleDeleteProject(p.id) }}
+                className="opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all p-0.5 shrink-0">
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Create project */}
+        {showCreateForm ? (
+          <div className="px-2 py-2 space-y-2 mb-2 bg-[var(--bg-surface)]/50 rounded-lg">
+            <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(newProjectName, newProjectColor); if (e.key === 'Escape') { setShowCreateForm(false); setNewProjectName('') } }}
+              placeholder="项目名称"
+              className="w-full text-xs bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-lg px-2 py-1.5 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 placeholder-stone-400"
+            />
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                {PROJECT_COLORS.slice(0, 5).map(c => (
+                  <button key={c} onClick={() => setNewProjectColor(c)}
+                    className={'w-3.5 h-3.5 rounded-full transition-all ' + (newProjectColor === c ? 'ring-2 ring-offset-1 ring-[var(--accent)]/40 scale-110' : 'hover:scale-110')}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => handleCreateProject(newProjectName, newProjectColor)}
+                  className="px-2 py-1 text-[10px] font-semibold bg-[var(--accent)] text-white rounded-lg hover:brightness-110 transition-all">
+                  创建
+                </button>
+                <button onClick={() => { setShowCreateForm(false); setNewProjectName('') }}
+                  className="px-2 py-1 text-[10px] font-semibold bg-[var(--bg-surface)] text-stone-500 dark:text-stone-400 rounded-lg hover:bg-[var(--bg-surface-hover)] transition-all">
+                  取消
+                </button>
               </div>
             </div>
-          )}
+          </div>
+        ) : (
+          <button onClick={() => setShowCreateForm(true)}
+            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] rounded-lg transition-all mb-2">
+            <Plus size={12} /> 新建项目
+          </button>
+        )}
+
+        {/* Tag manager toggle */}
+        <button onClick={() => setShowTagManager(!showTagManager)}
+          className={'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-lg transition-all mb-1 ' + (showTagManager ? 'text-[var(--accent)] bg-[var(--accent)]/8' : 'text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)]')}>
+          <span className="w-3 h-3 rounded flex items-center justify-center text-[8px] font-bold border border-current/30 bg-current/5">#</span>
+          管理标签
+          <span className="ml-auto text-[9px] tabular-nums opacity-60">{projectTags.length}</span>
+        </button>
+        {showTagManager && (
+          <div className="px-2 py-2 space-y-2 mb-2 bg-[var(--bg-surface)]/50 rounded-lg">
+            {projectTags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {projectTags.map(t => (
+                  <span key={t.id} className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded text-white font-medium" style={{ backgroundColor: t.color }}>
+                    {t.name}
+                    <button onClick={() => handleDeleteTag(t.id)} className="text-white/50 hover:text-white transition-colors">
+                      <X size={8} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-1.5">
+              <input value={newTagName} onChange={e => setNewTagName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateTag() }}
+                placeholder="新标签"
+                className="flex-1 text-[10px] bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded px-2 py-1 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 placeholder-stone-400" />
+              <div className="flex gap-0.5">
+                {['#e03e3e','#e07a3e','#e0b03e','#3eb07a','#3e7ae0','#6a3ee0','#e03e7a','#7a8e9a'].map(c => (
+                  <button key={c} onClick={() => setNewTagColor(c)}
+                    className={'w-3 h-3 rounded-full transition-all ' + (newTagColor === c ? 'ring-2 ring-offset-1 ring-[var(--accent)]/40 scale-110' : 'hover:scale-110')}
+                    style={{ backgroundColor: c }} />
+                ))}
+              </div>
+              <button onClick={handleCreateTag}
+                className="p-1 rounded text-stone-400 hover:text-[var(--accent)] transition-colors">
+                <Plus size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="h-px bg-[var(--border-divider)]/30 my-2" />
+
+        {/* Navigation */}
+        <div className="space-y-0.5">
+          <button onClick={() => setViewMode(viewMode === 'grid' ? 'timeline' : 'grid')}
+            className={'w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg transition-all ' + (viewMode === 'timeline' ? 'text-[var(--accent)] bg-[var(--accent)]/8' : 'text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)]')}>
+            {viewMode === 'grid' ? <CalendarDays size={13} /> : <LayoutGrid size={13} />}
+            {viewMode === 'grid' ? '时间线视图' : '卡片视图'}
+          </button>
+          <button onClick={() => setShowStats(true)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg transition-all text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)]">
+            <BarChart3 size={13} /> 统计看板
+          </button>
+          <button onClick={() => setShowPomodoro(true)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded-lg transition-all text-stone-500 dark:text-stone-400 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)]">
+            <Timer size={13} /> 番茄钟
+          </button>
         </div>
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-300 dark:text-stone-600" />
-          <input ref={searchRef}
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="搜索 (⌘K /)"
-            className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--input-bg)] text-stone-700 dark:text-stone-300 placeholder-stone-400 dark:placeholder-stone-500 border border-[var(--border-item)] rounded-lg outline-none focus:border-[var(--accent)]/50 focus:shadow-[0_0_0_3px_rgb(var(--accent-rgb)/0.08)] transition-all"
-          />
-          {searchQuery && (
-            <button onClick={() => { setSearchQuery(''); setSearchResults([]) }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400">
-              <X size={12} />
+        <div className="flex-1" />
+
+        <div className="h-px bg-[var(--border-divider)]/30 my-2" />
+
+        {/* Theme & settings */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <button onClick={() => setDark(!dark)}
+              className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all"
+              title={dark ? '浅色模式' : '深色模式'}>
+              {dark ? <Sun size={13} /> : <Moon size={13} />}
             </button>
-          )}
-          {searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-lg shadow-[0_8px_24px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] z-50 max-h-64 overflow-y-auto">
-              {searchResults.map(r => (
-                <button key={r.item_id} onClick={() => { setOpenItem({ cardId: r.card_id, itemId: r.item_id }); setSearchResults([]); setSearchQuery('') }}
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] border-b border-[var(--border-divider)]/30 last:border-0 transition-colors">
-                  <div className="text-stone-500 dark:text-stone-400 truncate">{r.card_title || '无标题'}</div>
-                  <div className="text-stone-700 dark:text-stone-300 font-medium truncate">{r.item_text || '无标题事项'}</div>
-                  <div className="text-stone-400 dark:text-stone-500 mt-0.5 truncate [&>mark]:bg-yellow-200 dark:[&>mark]:bg-yellow-700 [&>mark]:text-stone-900 dark:[&>mark]:text-stone-100" dangerouslySetInnerHTML={{ __html: r.snippet }} />
-                </button>
-              ))}
+            <div className="relative">
+              <button onClick={() => setShowThemePicker(!showThemePicker)}
+                className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all"
+                title="主题">
+                <span className="block w-3 h-3 rounded-full border border-stone-300 dark:border-stone-600" style={{ backgroundColor: accentColor }} />
+              </button>
+              {showThemePicker && (
+                <div className="absolute left-0 bottom-full mb-1 min-w-[220px] bg-white dark:bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-xl shadow-[0_8px_32px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] z-50 p-3 animate-fade-in"
+                  onClick={e => e.stopPropagation()}>
+                  <div className="text-[10px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">主题预设</div>
+                  <div className="grid grid-cols-5 gap-1 mb-2">
+                    {THEME_PRESETS.map(p => (
+                      <button key={p.id} onClick={() => { setThemePreset(p.id); setAccentColor(p.accent); localStorage.setItem('themePreset', p.id); localStorage.setItem('accentColor', p.accent); setShowThemePicker(false) }}
+                        className={'flex flex-col items-center gap-0.5 p-1 rounded transition-all ' + (themePreset === p.id ? 'bg-[var(--bg-surface)] ring-1 ring-[var(--accent)]/30' : 'hover:bg-[var(--bg-surface)]')}>
+                        <div className="flex gap-px">
+                          {[p.light['--bg-page'], p.light['--border-card'], p.accent].map((c, i) => (
+                            <span key={i} className={'w-2.5 h-2.5 ' + (i === 2 ? 'rounded-full' : 'rounded-sm')} style={{ backgroundColor: c }} />
+                          ))}
+                        </div>
+                        <span className="text-[8px] text-stone-500 dark:text-stone-400 leading-none">{p.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[10px] font-semibold text-stone-500 dark:text-stone-400 mb-1">强调色</div>
+                  <div className="flex flex-wrap gap-1">
+                    {['#c2410c','#2563eb','#059669','#7c3aed','#e03e7a','#d97706','#0d9488','#78716c'].map(c => (
+                      <button key={c} onClick={() => setAccentColor(c)}
+                        className={'w-4 h-4 rounded transition-all ' + (accentColor === c ? 'ring-2 ring-offset-1 ring-stone-400 dark:ring-offset-stone-800 scale-110' : 'hover:scale-110')}
+                        style={{ backgroundColor: c }} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <button onClick={async () => {
+              try { const json = await invoke<string>('export_data'); const blob = new Blob([json], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `todopotato-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url) } catch {}
+            }} className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all"
+              title="导出数据">
+              <Download size={13} />
+            </button>
+            <button onClick={() => importRef.current?.click()}
+              className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all"
+              title="导入数据">
+              <Upload size={13} />
+            </button>
+            <input ref={importRef} type="file" hidden accept=".json"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (!window.confirm('导入将覆盖所有现有数据，确定继续？')) return
+                try { const text = await file.text(); await invoke('import_data', { json: text }); loadProjects() } catch (err) { alert('导入失败：' + err) }
+                e.target.value = ''
+              }} />
+          </div>
+          <div className="px-2 py-1 text-[10px] text-stone-400 dark:text-stone-500 tabular-nums">
+            {searchQuery ? `${filteredCards.length} 个结果` : `${cards.length} 个便签`}
+          </div>
+        </div>
+      </div>
+
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Search bar */}
+        <div className="shrink-0 flex items-center gap-2 mb-5 bg-[var(--bg-surface)]/40 backdrop-blur-sm rounded-xl px-3 py-2 border border-[var(--border-item)]/40 relative z-10">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-300 dark:text-stone-600" />
+            <input ref={searchRef}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="搜索 (⌘K /)"
+              className="w-full pl-8 pr-3 py-1.5 text-sm bg-[var(--input-bg)] text-stone-700 dark:text-stone-300 placeholder-stone-400 dark:placeholder-stone-500 border border-[var(--border-item)] rounded-lg outline-none focus:border-[var(--accent)]/50 focus:shadow-[0_0_0_3px_rgb(var(--accent-rgb)/0.08)] transition-all"
+            />
+            {searchQuery && (
+              <button onClick={() => { setSearchQuery(''); setSearchResults([]) }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 dark:text-stone-500 hover:text-stone-600 dark:hover:text-stone-400">
+                <X size={12} />
+              </button>
+            )}
+            {searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-lg shadow-[0_8px_24px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] z-50 max-h-64 overflow-y-auto">
+                {searchResults.map(r => (
+                  <button key={r.item_id} onClick={() => { setOpenItem({ cardId: r.card_id, itemId: r.item_id }); setSearchResults([]); setSearchQuery('') }}
+                    className="w-full text-left px-3 py-2 text-xs hover:bg-stone-100 dark:hover:bg-[var(--bg-surface-hover)] border-b border-[var(--border-divider)]/30 last:border-0 transition-colors">
+                    <div className="text-stone-500 dark:text-stone-400 truncate">{r.card_title || '无标题'}</div>
+                    <div className="text-stone-700 dark:text-stone-300 font-medium truncate">{r.item_text || '无标题事项'}</div>
+                    <div className="text-stone-400 dark:text-stone-500 mt-0.5 truncate [&>mark]:bg-yellow-200 dark:[&>mark]:bg-yellow-700 [&>mark]:text-stone-900 dark:[&>mark]:text-stone-100" dangerouslySetInnerHTML={{ __html: r.snippet }} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 flex items-start gap-4 overflow-x-auto">
+          {viewMode === 'grid' ? (
+            <>
+            {filteredCards.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center h-full min-h-[300px] text-stone-400 dark:text-stone-500 gap-2">
+                {searchQuery ? (
+                  <>
+                    <Search size={32} strokeWidth={1} className="opacity-20" />
+                    <p className="text-sm font-medium">没有找到匹配的便签</p>
+                    <button onClick={() => { setSearchQuery(''); setSearchResults([]) }}
+                      className="text-xs text-[var(--accent)] hover:underline transition-colors">清除搜索</button>
+                  </>
+                ) : (
+                  <>
+                    <LayoutGrid size={32} strokeWidth={1} className="opacity-20" />
+                    <p className="text-sm font-medium">还没有便签</p>
+                    <p className="text-xs text-stone-300 dark:text-stone-600">点击下方按钮创建你的第一张便签</p>
+                  </>
+                )}
+              </div>
+            ) : (
+            filteredCards.map(card => (
+              <NoteCard
+                key={card.id}
+                card={card}
+                onSetTitle={handleSetTitle}
+                onSetDate={handleSetDate}
+                onDeleteCard={handleDeleteCard}
+                onAddItem={handleAddItem}
+                onUpdateItem={handleUpdateItem}
+                onDeleteItem={handleDeleteItem}
+                onDragItemStart={handleDragItemStart}
+                onDragItemOver={handleDragItemOver}
+                onDropItem={handleDropItem}
+                onDragItemEnd={handleDragItemEnd}
+                onOpenItem={handleOpenItem}
+                onCardDragStart={handleCardDragStart}
+                onCardDragOver={handleCardDragOver}
+                onCardDragEnd={handleCardDragEnd}
+                draggingTask={draggingTask}
+              />
+            ))
+            )}
+            <button onClick={handleAddCard}
+              className="group w-[300px] h-14 shrink-0 flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 dark:border-stone-600 text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:border-[var(--accent)]/40 hover:bg-[var(--bg-surface)]/40 transition-all text-xs rounded-xl active:scale-[0.97]">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-stone-700 group-hover:bg-[var(--accent)]/10 group-hover:text-[var(--accent)] transition-all">
+                <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300" />
+              </span>
+              添加便签
+            </button>
+            </>
+          ) : (
+            <div className="flex-1 min-h-0">
+              <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} onTimelineAddItem={handleTimelineAddItem} />
             </div>
           )}
         </div>
-
-        <div className="w-px h-5 bg-[var(--border-divider)]/40 mx-1" />
-
-        {/* View & tools */}
-        <div className="flex items-center gap-0.5">
-          <button onClick={() => setViewMode(viewMode === 'grid' ? 'timeline' : 'grid')}
-            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-            title={viewMode === 'grid' ? '时间线视图' : '卡片视图'}>
-            {viewMode === 'grid' ? <CalendarDays size={15} /> : <LayoutGrid size={15} />}
-          </button>
-          <button onClick={() => setShowStats(true)}
-            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-            title="统计看板">
-            <BarChart3 size={15} />
-          </button>
-          <button onClick={() => setShowPomodoro(true)}
-            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-            title="番茄钟">
-            <Timer size={15} />
-          </button>
-        </div>
-
-        <div className="w-px h-5 bg-[var(--border-divider)]/40 mx-1" />
-
-        {/* Utilities */}
-        <div className="flex items-center gap-0.5">
-          <button onClick={() => setDark(!dark)}
-            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-            title={dark ? '浅色模式' : '深色模式'}>
-            {dark ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
-          <button onClick={async () => {
-            try {
-              const json = await invoke<string>('export_data')
-              const blob = new Blob([json], { type: 'application/json' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `todopotato-backup-${new Date().toISOString().slice(0, 10)}.json`
-              a.click()
-              URL.revokeObjectURL(url)
-            } catch {}
-          }} className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-            title="导出数据">
-            <Download size={15} />
-          </button>
-          <button onClick={() => importRef.current?.click()}
-            className="p-1.5 rounded-lg text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:bg-[var(--bg-surface)] transition-all active:scale-[0.95]"
-            title="导入数据">
-            <Upload size={15} />
-          </button>
-        </div>
-
-        <input ref={importRef} type="file" hidden accept=".json"
-          onChange={async (e) => {
-            const file = e.target.files?.[0]
-            if (!file) return
-            if (!window.confirm('导入将覆盖所有现有数据，确定继续？')) return
-            try {
-              const text = await file.text()
-              await invoke('import_data', { json: text })
-              loadProjects()
-            } catch (err) {
-              alert('导入失败：' + err)
-            }
-            e.target.value = ''
-          }} />
-
-        <span className="text-xs text-stone-400 dark:text-stone-500 ml-auto tabular-nums">
-          {searchQuery ? `${filteredCards.length} 个结果` : `${cards.length} 个便签`}
-        </span>
       </div>
-      <div className="flex-1 flex items-start gap-4 overflow-x-auto">
-        {viewMode === 'grid' ? (
-          <>
-          {filteredCards.map(card => (
-            <NoteCard
-              key={card.id}
-              card={card}
-              onSetTitle={handleSetTitle}
-              onSetDate={handleSetDate}
-              onDeleteCard={handleDeleteCard}
-              onAddItem={handleAddItem}
-              onUpdateItem={handleUpdateItem}
-              onDeleteItem={handleDeleteItem}
-              onDragItemStart={handleDragItemStart}
-              onDragItemOver={handleDragItemOver}
-              onDropItem={handleDropItem}
-              onDragItemEnd={handleDragItemEnd}
-              onOpenItem={handleOpenItem}
-              onCardDragStart={handleCardDragStart}
-              onCardDragOver={handleCardDragOver}
-              onCardDragEnd={handleCardDragEnd}
-              draggingTask={draggingTask}
-            />
-          ))}
-          <button onClick={handleAddCard}
-            className="group w-[300px] h-14 shrink-0 flex items-center justify-center gap-2 border-2 border-dashed border-stone-300 dark:border-stone-600 text-stone-400 dark:text-stone-500 hover:text-[var(--accent)] hover:border-[var(--accent)]/40 hover:bg-[var(--bg-surface)]/40 transition-all text-xs rounded-xl active:scale-[0.97]">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-stone-100 dark:bg-stone-700 group-hover:bg-[var(--accent)]/10 group-hover:text-[var(--accent)] transition-all">
-              <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300" />
-            </span>
-            添加便签
-          </button>
-          </>
-        ) : (
-          <div className="flex-1 min-h-0">
-            <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} onTimelineAddItem={handleTimelineAddItem} />
-          </div>
-        )}
-      </div>
+
+      {/* Modals */}
       {openItem && (() => {
         const card = cards.find(c => c.id === openItem.cardId)
         const item = card?.items.find(i => i.id === openItem.itemId)
         if (!card || !item) return null
-        return <TaskDetailModal card={card} item={item} onClose={() => setOpenItem(null)}
+        return <TaskDetailModal card={card} item={item} projectTags={projectTags} onClose={() => setOpenItem(null)}
           onUpdate={handleUpdateItem} onDelete={handleDeleteItem} />
       })()}
       {showStats && <StatisticsPanel onClose={() => setShowStats(false)} />}
@@ -1500,6 +1806,8 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
   const [running, setRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [pomodoroStats, setPomodoroStats] = useState<PomodoroStats | null>(null)
+  const modeRef = useRef(mode)
+  modeRef.current = mode
 
   useEffect(() => {
     loadStats()
@@ -1527,12 +1835,14 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
         setMinutes(m => {
           if (m > 0) return m - 1
           setRunning(false)
-          setMode(mode === 'work' ? 'break' : 'work')
-          if (mode === 'work') {
+          const currentMode = modeRef.current
+          const nextMode = currentMode === 'work' ? 'break' : 'work'
+          setMode(nextMode)
+          if (currentMode === 'work') {
             invoke('log_pomodoro', { item_id: '', duration_minutes: MODE_WORK }).catch(() => {})
             loadStats()
           }
-          return mode === 'work' ? MODE_BREAK : MODE_WORK
+          return nextMode === 'work' ? MODE_WORK : MODE_BREAK
         })
         return 59
       })
@@ -1544,12 +1854,14 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
     if (intervalRef.current) clearInterval(intervalRef.current)
   }
 
-  const reset = () => {
+  const switchMode = (newMode: 'work' | 'break') => {
     pause()
-    setMode('work')
-    setMinutes(MODE_WORK)
+    setMode(newMode)
+    setMinutes(newMode === 'work' ? MODE_WORK : MODE_BREAK)
     setSeconds(0)
   }
+
+  const reset = () => switchMode('work')
 
   const totalSeconds = minutes * 60 + seconds
   const total = (mode === 'work' ? MODE_WORK : MODE_BREAK) * 60
@@ -1572,11 +1884,11 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
 
         {/* Mode switch */}
         <div className="flex bg-[var(--bg-surface)] rounded-lg p-0.5 mb-6">
-          <button onClick={() => { reset(); setMode('work') }}
+          <button onClick={() => switchMode('work')}
             className={'flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ' + (mode === 'work' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
             专注 25分
           </button>
-          <button onClick={() => { reset(); setMode('break') }}
+          <button onClick={() => switchMode('break')}
             className={'flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ' + (mode === 'break' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
             休息 5分
           </button>
