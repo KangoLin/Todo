@@ -1798,10 +1798,12 @@ interface Statistics {
 }
 
 function PomodoroTimer({ onClose }: { onClose: () => void }) {
-  const MODE_WORK = 25
-  const MODE_BREAK = 5
+  const [workDuration, setWorkDuration] = useState(() => { const v = localStorage.getItem('pomodoroWork'); return v ? parseInt(v) : 25 })
+  const [breakDuration, setBreakDuration] = useState(() => { const v = localStorage.getItem('pomodoroBreak'); return v ? parseInt(v) : 5 })
+  const [editingWork, setEditingWork] = useState(false)
+  const [editingBreak, setEditingBreak] = useState(false)
   const [mode, setMode] = useState<'work' | 'break'>('work')
-  const [minutes, setMinutes] = useState(MODE_WORK)
+  const [minutes, setMinutes] = useState(workDuration)
   const [seconds, setSeconds] = useState(0)
   const [running, setRunning] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -1809,22 +1811,16 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
   const modeRef = useRef(mode)
   modeRef.current = mode
 
-  useEffect(() => {
-    loadStats()
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
+  useEffect(() => { loadStats() }, [])
+  useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h) }, [onClose])
+  useEffect(() => { return () => { if (intervalRef.current) clearInterval(intervalRef.current) } }, [])
+  useEffect(() => { setMinutes(mode === 'work' ? workDuration : breakDuration); setSeconds(0) }, [workDuration, breakDuration])
 
-  useEffect(() => {
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [])
+  const saveWork = (v: number) => { const d = Math.max(1, Math.min(120, v)); setWorkDuration(d); localStorage.setItem('pomodoroWork', String(d)); setEditingWork(false) }
+  const saveBreak = (v: number) => { const d = Math.max(1, Math.min(60, v)); setBreakDuration(d); localStorage.setItem('pomodoroBreak', String(d)); setEditingBreak(false) }
 
   const loadStats = async () => {
-    try {
-      const s = await invoke<PomodoroStats>('get_pomodoro_stats')
-      setPomodoroStats(s)
-    } catch {}
+    try { const s = await invoke<PomodoroStats>('get_pomodoro_stats'); setPomodoroStats(s) } catch {}
   }
 
   const start = () => {
@@ -1839,32 +1835,26 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
           const nextMode = currentMode === 'work' ? 'break' : 'work'
           setMode(nextMode)
           if (currentMode === 'work') {
-            invoke('log_pomodoro', { item_id: '', duration_minutes: MODE_WORK }).catch(() => {})
+            invoke('log_pomodoro', { item_id: '', duration_minutes: workDuration }).catch(() => {})
             loadStats()
           }
-          return nextMode === 'work' ? MODE_WORK : MODE_BREAK
+          return nextMode === 'work' ? workDuration : breakDuration
         })
         return 59
       })
     }, 1000)
   }
 
-  const pause = () => {
-    setRunning(false)
-    if (intervalRef.current) clearInterval(intervalRef.current)
-  }
+  const pause = () => { setRunning(false); if (intervalRef.current) clearInterval(intervalRef.current) }
 
   const switchMode = (newMode: 'work' | 'break') => {
-    pause()
-    setMode(newMode)
-    setMinutes(newMode === 'work' ? MODE_WORK : MODE_BREAK)
-    setSeconds(0)
+    pause(); setMode(newMode); setMinutes(newMode === 'work' ? workDuration : breakDuration); setSeconds(0)
   }
 
   const reset = () => switchMode('work')
 
   const totalSeconds = minutes * 60 + seconds
-  const total = (mode === 'work' ? MODE_WORK : MODE_BREAK) * 60
+  const total = (mode === 'work' ? workDuration : breakDuration) * 60
   const progress = total > 0 ? (total - totalSeconds) / total * 100 : 0
 
   return (
@@ -1882,16 +1872,47 @@ function PomodoroTimer({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Mode switch */}
-        <div className="flex bg-[var(--bg-surface)] rounded-lg p-0.5 mb-6">
-          <button onClick={() => switchMode('work')}
-            className={'flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ' + (mode === 'work' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
-            专注 25分
-          </button>
-          <button onClick={() => switchMode('break')}
-            className={'flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ' + (mode === 'break' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-500 dark:text-stone-400 hover:text-stone-700 dark:hover:text-stone-300')}>
-            休息 5分
-          </button>
+        {/* Duration settings */}
+        <div className="flex items-center gap-3 bg-[var(--bg-surface)] rounded-lg p-2 mb-5">
+          <div className="flex-1 flex items-center gap-1.5">
+            <span className="text-[10px] text-stone-500 dark:text-stone-400 font-medium">专注</span>
+            {editingWork ? (
+              <input autoFocus type="number" min={1} max={120} defaultValue={workDuration}
+                onBlur={e => saveWork(parseInt(e.target.value) || workDuration)}
+                onKeyDown={e => { if (e.key === 'Enter') saveWork(parseInt((e.target as HTMLInputElement).value) || workDuration); if (e.key === 'Escape') setEditingWork(false) }}
+                className="w-12 text-xs text-center bg-white dark:bg-stone-700 border border-[var(--border-item)] rounded-md px-1 py-1 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 tabular-nums" />
+            ) : (
+              <button onClick={() => { if (!running) setEditingWork(true) }}
+                className={'text-sm font-bold tabular-nums px-2 py-0.5 rounded-md transition-all ' + (mode === 'work' ? 'bg-[var(--accent)] text-white shadow-sm' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700')}>
+                {workDuration}<span className="text-[10px] font-normal ml-0.5">分</span>
+              </button>
+            )}
+          </div>
+          <div className="flex-1 flex items-center gap-1.5">
+            <span className="text-[10px] text-stone-500 dark:text-stone-400 font-medium">休息</span>
+            {editingBreak ? (
+              <input autoFocus type="number" min={1} max={60} defaultValue={breakDuration}
+                onBlur={e => saveBreak(parseInt(e.target.value) || breakDuration)}
+                onKeyDown={e => { if (e.key === 'Enter') saveBreak(parseInt((e.target as HTMLInputElement).value) || breakDuration); if (e.key === 'Escape') setEditingBreak(false) }}
+                className="w-12 text-xs text-center bg-white dark:bg-stone-700 border border-[var(--border-item)] rounded-md px-1 py-1 outline-none focus:border-[var(--accent)] text-stone-700 dark:text-stone-300 tabular-nums" />
+            ) : (
+              <button onClick={() => { if (!running) setEditingBreak(true) }}
+                className={'text-sm font-bold tabular-nums px-2 py-0.5 rounded-md transition-all ' + (mode === 'break' ? 'bg-[var(--accent)] text-white shadow-sm' : 'text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700')}>
+                {breakDuration}<span className="text-[10px] font-normal ml-0.5">分</span>
+              </button>
+            )}
+          </div>
+          {/* Mode toggle */}
+          <div className="flex bg-[var(--bg-card-start)] rounded-md p-0.5">
+            <button onClick={() => switchMode('work')}
+              className={'text-[10px] font-semibold px-2.5 py-1 rounded transition-all ' + (mode === 'work' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-400 dark:text-stone-500 hover:text-stone-600')}>
+              专注
+            </button>
+            <button onClick={() => switchMode('break')}
+              className={'text-[10px] font-semibold px-2.5 py-1 rounded transition-all ' + (mode === 'break' ? 'bg-white dark:bg-stone-700 text-stone-800 dark:text-stone-200 shadow-sm' : 'text-stone-400 dark:text-stone-500 hover:text-stone-600')}>
+              休息
+            </button>
+          </div>
         </div>
 
         {/* Timer display */}
