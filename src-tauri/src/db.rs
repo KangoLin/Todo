@@ -338,6 +338,75 @@ pub fn get_pet(db: tauri::State<'_, Database>) -> Result<Pet, String> {
     get_pet_inner(&db)
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CompletedSummary {
+    pub item_id: String,
+    pub strength_exp: i32,
+    pub agility_exp: i32,
+    pub focus_exp: i32,
+    pub endurance_exp: i32,
+    pub gold: i32,
+    pub level_up: bool,
+    pub new_level: i32,
+    pub form: String,
+}
+
+/// 解析 "HH:mm" 为当天分钟数，非法返回 0。
+fn minutes_of(time: &str) -> i32 {
+    let parts: Vec<&str> = time.split(':').collect();
+    if parts.len() != 2 { return 0; }
+    let h: i32 = parts[0].parse().unwrap_or(0);
+    let m: i32 = parts[1].parse().unwrap_or(0);
+    if !(0..=23).contains(&h) || !(0..=59).contains(&m) { return 0; }
+    h * 60 + m
+}
+
+/// 完成一个时间块：标记 done、结算经验/金币（未接专注数据时按按时完成结算）、写成长日志。
+pub fn complete_item_inner(db: &Database, id: &str) -> Result<CompletedSummary, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let (start, end, done): (String, String, i32) = conn.query_row(
+        "SELECT start_time, end_time, done FROM items WHERE id = ?1",
+        rusqlite::params![id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    ).map_err(|e| e.to_string())?;
+    if done == 1 {
+        return Err("事项已完成".into());
+    }
+
+    let planned = minutes_of(&end) - minutes_of(&start);
+    // 暂无实际专注时长上报，默认按按时完成结算；延长奖励后续由番茄钟数据补充
+    let r = reward::settle_completion(planned, planned);
+
+    conn.execute(
+        "UPDATE items SET done = 1 WHERE id = ?1",
+        rusqlite::params![id],
+    ).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO pet_growth_log (id, event_type, amount) VALUES (?1, 'completed_item', ?2)",
+        rusqlite::params![Uuid::new_v4().to_string(), format!("+{}力量 +{}敏捷 +{}金币", r.strength_exp, r.agility_exp, r.gold)],
+    ).map_err(|e| e.to_string())?;
+
+    let (level_up, new_level) = apply_exp(&conn, r.strength_exp, r.agility_exp, r.focus_exp, r.endurance_exp, r.gold)?;
+    let form = read_pet_row(&conn)?.form;
+
+    Ok(CompletedSummary {
+        item_id: id.to_string(),
+        strength_exp: r.strength_exp,
+        agility_exp: r.agility_exp,
+        focus_exp: r.focus_exp,
+        endurance_exp: r.endurance_exp,
+        gold: r.gold,
+        level_up,
+        new_level,
+        form,
+    })
+}
+
+#[tauri::command]
+pub fn complete_item(db: tauri::State<'_, Database>, id: String) -> Result<CompletedSummary, String> {
+    complete_item_inner(&db, &id)
+}
+
 // ── Project commands ──
 
 #[tauri::command]
@@ -1132,5 +1201,44 @@ mod tests {
         assert_eq!(row.strength, 201); // 0 + 200 + 升级+1
         assert_eq!(row.gold, 100);
         assert_eq!(row.exp, 100);
+    }
+
+    #[test]
+    fn complete_item_rewards_and_updates_pet() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let card_id = Uuid::new_v4().to_string();
+        let item_id = Uuid::new_v4().to_string();
+        conn.execute("INSERT INTO cards (id, title, collapsed, sort_order) VALUES (?1,'测试卡',0,0)", rusqlite::params![card_id]).unwrap();
+        conn.execute("INSERT INTO items (id, card_id, text, description, start_time, end_time, done, sort_order) VALUES (?1,?2,'学习','','09:00','10:00',0,0)", rusqlite::params![&item_id, card_id]).unwrap();
+        drop(conn);
+
+        let sum = complete_item_inner(&db, &item_id).unwrap();
+        assert_eq!(sum.strength_exp, 10);
+        assert_eq!(sum.agility_exp, 5);
+        assert_eq!(sum.gold, 10);
+        assert!(!sum.level_up);
+
+        let pet = get_pet_inner(&db).unwrap();
+        assert_eq!(pet.gold, 10);
+        assert_eq!(pet.strength, 10);
+        assert_eq!(pet.agility, 5);
+    }
+
+    #[test]
+    fn complete_item_twice_errors() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let card_id = Uuid::new_v4().to_string();
+        let item_id = Uuid::new_v4().to_string();
+        conn.execute("INSERT INTO cards (id, title, collapsed, sort_order) VALUES (?1,'测试卡',0,0)", rusqlite::params![card_id]).unwrap();
+        conn.execute("INSERT INTO items (id, card_id, text, description, start_time, end_time, done, sort_order) VALUES (?1,?2,'学习','','09:00','10:00',0,0)", rusqlite::params![&item_id, card_id]).unwrap();
+        drop(conn);
+
+        complete_item_inner(&db, &item_id).unwrap();
+        let err = complete_item_inner(&db, &item_id).unwrap_err();
+        assert!(err.contains("已完成"));
     }
 }
