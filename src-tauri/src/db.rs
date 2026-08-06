@@ -363,7 +363,7 @@ fn minutes_of(time: &str) -> i32 {
 
 /// 完成一个时间块：标记 done、结算经验/金币（未接专注数据时按按时完成结算）、写成长日志。
 pub fn complete_item_inner(db: &Database, id: &str) -> Result<CompletedSummary, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
     let (start, end, done): (String, String, i32) = conn.query_row(
         "SELECT start_time, end_time, done FROM items WHERE id = ?1",
         rusqlite::params![id],
@@ -377,17 +377,19 @@ pub fn complete_item_inner(db: &Database, id: &str) -> Result<CompletedSummary, 
     // 暂无实际专注时长上报，默认按按时完成结算；延长奖励后续由番茄钟数据补充
     let r = reward::settle_completion(planned, planned);
 
-    conn.execute(
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute(
         "UPDATE items SET done = 1 WHERE id = ?1",
         rusqlite::params![id],
     ).map_err(|e| e.to_string())?;
-    conn.execute(
+    tx.execute(
         "INSERT INTO pet_growth_log (id, event_type, amount) VALUES (?1, 'completed_item', ?2)",
         rusqlite::params![Uuid::new_v4().to_string(), format!("+{}力量 +{}敏捷 +{}金币", r.strength_exp, r.agility_exp, r.gold)],
     ).map_err(|e| e.to_string())?;
 
-    let (level_up, new_level) = apply_exp(&conn, r.strength_exp, r.agility_exp, r.focus_exp, r.endurance_exp, r.gold)?;
-    let form = read_pet_row(&conn)?.form;
+    let (level_up, new_level) = apply_exp(&tx, r.strength_exp, r.agility_exp, r.focus_exp, r.endurance_exp, r.gold)?;
+    let form = read_pet_row(&tx)?.form;
+    tx.commit().map_err(|e| e.to_string())?;
 
     Ok(CompletedSummary {
         item_id: id.to_string(),
@@ -973,18 +975,20 @@ pub struct PomodoroStats {
 
 /// 记录番茄钟会话并结算宠物奖励：+3 专注经验 +3 金币，写成长日志。
 pub fn log_pomodoro_inner(db: &Database, item_id: &str, duration_minutes: i32) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute(
+    let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute(
         "INSERT INTO pomodoro_sessions (id, item_id, duration_minutes) VALUES (?1, ?2, ?3)",
         params![Uuid::new_v4().to_string(), item_id, duration_minutes],
     ).map_err(|e| e.to_string())?;
 
     // 番茄钟结算：+3 专注经验 +3 金币（规则来自 spec）
-    apply_exp(&conn, 0, 0, 3, 0, 3)?;
-    conn.execute(
+    apply_exp(&tx, 0, 0, 3, 0, 3)?;
+    tx.execute(
         "INSERT INTO pet_growth_log (id, event_type, amount) VALUES (?1, 'pomodoro', ?2)",
         params![Uuid::new_v4().to_string(), format!("+3专注 +3金币({}分钟)", duration_minutes)],
     ).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1212,6 +1216,21 @@ mod tests {
         assert_eq!(row.strength, 201); // 0 + 200 + 升级+1
         assert_eq!(row.gold, 100);
         assert_eq!(row.exp, 100);
+    }
+
+    #[test]
+    fn apply_exp_satiety_discount_under_30() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        let conn = db.conn.lock().unwrap();
+        conn.execute("UPDATE pet SET satiety = 20 WHERE id='main'", []).unwrap();
+        let (_, new_level) = apply_exp(&conn, 100, 0, 0, 0, 10).unwrap();
+        // 100 经验打 8 折 = 80；升级需 1*100=100，80 < 100 不升级
+        assert_eq!(new_level, 1);
+        let row = read_pet_row(&conn).unwrap();
+        assert_eq!(row.exp, 80);      // 经验打折
+        assert_eq!(row.strength, 100); // 属性不打折
+        assert_eq!(row.gold, 10);      // 金币不打折
     }
 
     #[test]
