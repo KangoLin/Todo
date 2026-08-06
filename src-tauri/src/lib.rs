@@ -33,7 +33,6 @@ pub fn run() {
             db::create_item,
             db::update_item,
             db::delete_item,
-            db::create_repeat_item,
             db::reorder_items,
             db::move_item,
             db::export_data,
@@ -44,6 +43,8 @@ pub fn run() {
             db::log_pomodoro,
             db::get_pomodoro_stats,
             db::manual_backup,
+            db::get_pet,
+            db::complete_item,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
