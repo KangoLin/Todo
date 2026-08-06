@@ -271,21 +271,21 @@ fn apply_exp(conn: &rusqlite::Connection, s: i32, a: i32, f: i32, e: i32, gold: 
     let exp_gain = ((s + a + f + e) as f64 * satiety_factor) as i32;
     let mut level = pet.level;
     let mut exp = pet.exp + exp_gain;
-    let mut leveled_up = false;
+    let mut levels_gained = 0;
     while exp >= level * 100 {
         exp -= level * 100;
         level += 1;
-        leveled_up = true;
+        levels_gained += 1;
     }
-    let strength = pet.strength + s + if leveled_up { 1 } else { 0 };
-    let agility = pet.agility + a + if leveled_up { 1 } else { 0 };
-    let focus = pet.focus + f + if leveled_up { 1 } else { 0 };
-    let endurance = pet.endurance + e + if leveled_up { 1 } else { 0 };
+    let strength = pet.strength + s + levels_gained;
+    let agility = pet.agility + a + levels_gained;
+    let focus = pet.focus + f + levels_gained;
+    let endurance = pet.endurance + e + levels_gained;
     conn.execute(
         "UPDATE pet SET strength = ?1, agility = ?2, focus = ?3, endurance = ?4, gold = ?5, exp = ?6, level = ?7, updated_at = datetime('now') WHERE id = 'main'",
         rusqlite::params![strength, agility, focus, endurance, pet.gold + gold, exp, level],
     ).map_err(|e| e.to_string())?;
-    Ok((leveled_up, level))
+    Ok((levels_gained > 0, level))
 }
 
 // 成长日志统一使用下面单条语句插入（调用方在持锁连接上执行）：
@@ -1215,6 +1215,22 @@ mod tests {
         let row = read_pet_row(&conn).unwrap();
         assert_eq!(row.strength, 201); // 0 + 200 + 升级+1
         assert_eq!(row.gold, 100);
+        assert_eq!(row.exp, 100);
+    }
+
+    #[test]
+    fn apply_exp_multi_level_up_adds_attribute_per_level() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let (leveled_up, new_level) = apply_exp(&conn, 700, 0, 0, 0, 0).unwrap();
+        assert!(leveled_up);
+        assert_eq!(new_level, 4); // 100+200+300=600 升至 4 级，剩 100 不够 4*100=400
+        let row = read_pet_row(&conn).unwrap();
+        assert_eq!(row.strength, 703); // 0 + 700 + 3 次升级 × +1
+        assert_eq!(row.agility, 3);
+        assert_eq!(row.focus, 3);
+        assert_eq!(row.endurance, 3);
         assert_eq!(row.exp, 100);
     }
 
