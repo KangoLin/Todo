@@ -145,6 +145,44 @@ impl Database {
             conn.execute("UPDATE cards SET project_id = ?1 WHERE project_id = ''", params![default_id]).ok();
         }
         conn.execute_batch("
+            CREATE TABLE IF NOT EXISTS pet (
+                id TEXT PRIMARY KEY DEFAULT 'main',
+                name TEXT NOT NULL DEFAULT '土豆',
+                level INTEGER NOT NULL DEFAULT 1,
+                exp INTEGER NOT NULL DEFAULT 0,
+                strength INTEGER NOT NULL DEFAULT 0,
+                agility INTEGER NOT NULL DEFAULT 0,
+                focus INTEGER NOT NULL DEFAULT 0,
+                endurance INTEGER NOT NULL DEFAULT 0,
+                gold INTEGER NOT NULL DEFAULT 0,
+                satiety INTEGER NOT NULL DEFAULT 100,
+                form TEXT NOT NULL DEFAULT 'sprout',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS pet_growth_log (
+                id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                amount TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS shop_items (
+                id TEXT PRIMARY KEY,
+                item_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                desc TEXT NOT NULL DEFAULT '',
+                price INTEGER NOT NULL,
+                effect INTEGER NOT NULL DEFAULT 0,
+                claim_once INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS inventory (
+                pet_id TEXT NOT NULL DEFAULT 'main',
+                item_id TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (pet_id, item_id)
+            );
+        ").ok();
+        conn.execute_batch("
             CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
                 text, description, content='items', content_rowid='rowid', tokenize='unicode61'
             );
@@ -892,4 +930,29 @@ pub fn manual_backup(db: tauri::State<'_, Database>) -> Result<String, String> {
     }
 
     Ok(dst.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_db() -> Database {
+        let path = std::env::temp_dir().join(format!("todo_pet_test_{}.db", Uuid::new_v4()));
+        let db = Database::new(path.to_str().unwrap()).unwrap();
+        std::fs::remove_file(&path).ok();
+        db
+    }
+
+    #[test]
+    fn pet_tables_created() {
+        let db = temp_db();
+        let conn = db.conn.lock().unwrap();
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('pet','pet_growth_log','shop_items','inventory')",
+            [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(count, 4);
+        let pet_count: i64 = conn.query_row("SELECT COUNT(*) FROM pet", [], |r| r.get(0)).unwrap();
+        assert_eq!(pet_count, 0);
+    }
 }
