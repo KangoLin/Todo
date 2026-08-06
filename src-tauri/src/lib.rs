@@ -1,4 +1,5 @@
 mod db;
+mod reward;
 
 use db::Database;
 use tauri::Manager;
