@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust（rusqlite bundled、uuid v4、chrono）、Tauri 2 命令模式。
 
+> **平台说明（2026-08-08）**：项目已定**移动端优先**（Android 首发，Tauri Mobile 路线，见 `AGENTS.md` 与 `docs/mobile-app.md`）。本计划为纯后端（Rust/SQLite），Tauri Mobile 下**零重写复用**，不受移动端决策影响，照常执行。移动端影响的是前端 UI（3 Tab 游戏基地 + 触控双轨，见 spec 第七章），由计划 B 承担。
+
 ## Global Constraints
 
 - 语言：全程中文注释/commit（AGENTS.md）
