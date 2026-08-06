@@ -971,15 +971,26 @@ pub struct PomodoroStats {
     pub today_minutes: i64,
 }
 
-#[tauri::command]
-pub fn log_pomodoro(db: tauri::State<'_, Database>, item_id: String, duration_minutes: i32) -> Result<(), String> {
+/// 记录番茄钟会话并结算宠物奖励：+3 专注经验 +3 金币，写成长日志。
+pub fn log_pomodoro_inner(db: &Database, item_id: &str, duration_minutes: i32) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let id = Uuid::new_v4().to_string();
     conn.execute(
         "INSERT INTO pomodoro_sessions (id, item_id, duration_minutes) VALUES (?1, ?2, ?3)",
-        params![id, item_id, duration_minutes],
+        params![Uuid::new_v4().to_string(), item_id, duration_minutes],
+    ).map_err(|e| e.to_string())?;
+
+    // 番茄钟结算：+3 专注经验 +3 金币（规则来自 spec）
+    apply_exp(&conn, 0, 0, 3, 0, 3)?;
+    conn.execute(
+        "INSERT INTO pet_growth_log (id, event_type, amount) VALUES (?1, 'pomodoro', ?2)",
+        params![Uuid::new_v4().to_string(), format!("+3专注 +3金币({}分钟)", duration_minutes)],
     ).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn log_pomodoro(db: tauri::State<'_, Database>, item_id: String, duration_minutes: i32) -> Result<(), String> {
+    log_pomodoro_inner(&db, &item_id, duration_minutes)
 }
 
 #[tauri::command]
@@ -1224,6 +1235,16 @@ mod tests {
         assert_eq!(pet.gold, 10);
         assert_eq!(pet.strength, 10);
         assert_eq!(pet.agility, 5);
+    }
+
+    #[test]
+    fn pomodoro_adds_focus_exp_and_gold() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        log_pomodoro_inner(&db, "", 25).unwrap();
+        let pet = get_pet_inner(&db).unwrap();
+        assert_eq!(pet.focus, 3);
+        assert_eq!(pet.gold, 3);
     }
 
     #[test]
