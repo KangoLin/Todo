@@ -29,7 +29,7 @@ pub fn settle_completion(planned_minutes: i32, actual_minutes: i32) -> Reward {
 
 /// 饱食度按小时自然消耗（每小时 -1，下限 0）。
 pub fn satiety_tick(satiety: i32, hours: i64) -> i32 {
-    (satiety - (hours as i32).min(10000)).max(0)
+    (satiety - (hours.min(10000) as i32)).max(0)
 }
 
 /// 战力公式：等级×20 + 力量×2 + 敏捷×1.5 + 专注×1.5 + 韧性×2

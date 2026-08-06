@@ -1,3 +1,4 @@
+use crate::reward;
 use rusqlite::{Connection, params};
 use serde::{Serialize, Deserialize};
 use std::sync::Mutex;
@@ -207,6 +208,134 @@ impl Database {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Pet {
+    pub id: String,
+    pub name: String,
+    pub level: i32,
+    pub exp: i32,
+    pub strength: i32,
+    pub agility: i32,
+    pub focus: i32,
+    pub endurance: i32,
+    pub gold: i32,
+    pub satiety: i32,
+    pub form: String,
+    pub power: i32,
+}
+
+#[derive(Clone)]
+struct PetRow {
+    id: String,
+    name: String,
+    level: i32,
+    exp: i32,
+    strength: i32,
+    agility: i32,
+    focus: i32,
+    endurance: i32,
+    gold: i32,
+    satiety: i32,
+    form: String,
+}
+
+fn read_pet_row(conn: &rusqlite::Connection) -> Result<PetRow, String> {
+    conn.query_row(
+        "SELECT id, name, level, exp, strength, agility, focus, endurance, gold, satiety, form FROM pet WHERE id = 'main'",
+        [],
+        |row| {
+            Ok(PetRow {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                level: row.get(2)?,
+                exp: row.get(3)?,
+                strength: row.get(4)?,
+                agility: row.get(5)?,
+                focus: row.get(6)?,
+                endurance: row.get(7)?,
+                gold: row.get(8)?,
+                satiety: row.get(9)?,
+                form: row.get(10)?,
+            })
+        },
+    ).map_err(|e| e.to_string())
+}
+
+/// 应用经验/金币：四维直接累计；等级经验按饱食度打折（<30 打 8 折）；
+/// 升到 L+1 级需要 L×100 经验，每次升级四维各 +1。
+fn apply_exp(conn: &rusqlite::Connection, s: i32, a: i32, f: i32, e: i32, gold: i32) -> Result<(bool, i32), String> {
+    let pet = read_pet_row(conn)?;
+    let satiety_factor = if pet.satiety < 30 { 0.8 } else { 1.0 };
+    let exp_gain = ((s + a + f + e) as f64 * satiety_factor) as i32;
+    let mut level = pet.level;
+    let mut exp = pet.exp + exp_gain;
+    let mut leveled_up = false;
+    while exp >= level * 100 {
+        exp -= level * 100;
+        level += 1;
+        leveled_up = true;
+    }
+    let strength = pet.strength + s + if leveled_up { 1 } else { 0 };
+    let agility = pet.agility + a + if leveled_up { 1 } else { 0 };
+    let focus = pet.focus + f + if leveled_up { 1 } else { 0 };
+    let endurance = pet.endurance + e + if leveled_up { 1 } else { 0 };
+    conn.execute(
+        "UPDATE pet SET strength = ?1, agility = ?2, focus = ?3, endurance = ?4, gold = ?5, exp = ?6, level = ?7, updated_at = datetime('now') WHERE id = 'main'",
+        rusqlite::params![strength, agility, focus, endurance, pet.gold + gold, exp, level],
+    ).map_err(|e| e.to_string())?;
+    Ok((leveled_up, level))
+}
+
+// 成长日志统一使用下面单条语句插入（调用方在持锁连接上执行）：
+// conn.execute(
+//   "INSERT INTO pet_growth_log (id, event_type, amount) VALUES (?1, ?2, ?3)",
+//   rusqlite::params![Uuid::new_v4().to_string(), event_type, amount],
+// ).map_err(|e| e.to_string())?;
+
+/// 宠物读取：不存在则初始化默认宠物，并按距上次更新的小时数衰减饱食度。
+pub fn get_pet_inner(db: &Database) -> Result<Pet, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let exists: i64 = conn.query_row("SELECT COUNT(*) FROM pet", [], |r| r.get(0)).unwrap_or(0);
+    if exists == 0 {
+        conn.execute(
+            "INSERT INTO pet (id, name, level, exp, strength, agility, focus, endurance, gold, satiety, form) VALUES ('main','土豆',1,0,0,0,0,0,0,100,'sprout')",
+            [],
+        ).map_err(|e| e.to_string())?;
+    }
+    let pet = read_pet_row(&conn)?;
+    let hours_elapsed: i64 = conn.query_row(
+        "SELECT CAST((julianday('now') - julianday(updated_at)) * 24 AS INTEGER) FROM pet WHERE id = 'main'",
+        [],
+        |r| r.get(0),
+    ).unwrap_or(0);
+    let new_satiety = reward::satiety_tick(pet.satiety, hours_elapsed);
+    if new_satiety != pet.satiety {
+        conn.execute(
+            "UPDATE pet SET satiety = ?1, updated_at = datetime('now') WHERE id = 'main'",
+            rusqlite::params![new_satiety],
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(Pet {
+        id: pet.id,
+        name: pet.name,
+        level: pet.level,
+        exp: pet.exp,
+        strength: pet.strength,
+        agility: pet.agility,
+        focus: pet.focus,
+        endurance: pet.endurance,
+        gold: pet.gold,
+        satiety: new_satiety,
+        form: pet.form,
+        power: reward::power(pet.level, pet.strength, pet.agility, pet.focus, pet.endurance),
+    })
+}
+
+#[tauri::command]
+pub fn get_pet(db: tauri::State<'_, Database>) -> Result<Pet, String> {
+    get_pet_inner(&db)
 }
 
 // ── Project commands ──
@@ -954,5 +1083,54 @@ mod tests {
         assert_eq!(count, 4);
         let pet_count: i64 = conn.query_row("SELECT COUNT(*) FROM pet", [], |r| r.get(0)).unwrap();
         assert_eq!(pet_count, 0);
+    }
+
+    #[test]
+    fn get_pet_initializes_default() {
+        let db = temp_db();
+        let pet = get_pet_inner(&db).unwrap();
+        assert_eq!(pet.name, "土豆");
+        assert_eq!(pet.level, 1);
+        assert_eq!(pet.satiety, 100);
+        assert_eq!(pet.form, "sprout");
+        assert_eq!(pet.power, 20); // 1*20 + 0 + 0 + 0 + 0
+    }
+
+    #[test]
+    fn get_pet_is_idempotent() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM pet", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn satiety_decays_after_hours() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        // 手动把 updated_at 拨回 5 小时前
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE pet SET satiety = 60, updated_at = datetime('now', '-5 hours') WHERE id='main'",
+            [],
+        ).unwrap();
+        drop(conn);
+        let pet = get_pet_inner(&db).unwrap();
+        assert_eq!(pet.satiety, 55); // 60 - 5 小时
+    }
+
+    #[test]
+    fn apply_exp_levels_up_and_updates_attributes() {
+        let db = temp_db();
+        let _ = get_pet_inner(&db).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let (leveled_up, new_level) = apply_exp(&conn, 200, 0, 0, 0, 100).unwrap();
+        assert!(leveled_up);
+        assert_eq!(new_level, 2); // 需要 1*100=100，200 经验升到 2 级，剩 100 不够 2*100=200
+        let row = read_pet_row(&conn).unwrap();
+        assert_eq!(row.strength, 201); // 0 + 200 + 升级+1
+        assert_eq!(row.gold, 100);
+        assert_eq!(row.exp, 100);
     }
 }
