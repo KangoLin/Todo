@@ -53,6 +53,13 @@
 - `tauri.conf.json` 中 `csp: null` — 无 CSP 限制。
 - Tauri 权限：`core:default` + `dialog:default` + `shell:default`（`capabilities/default.json`）。
 
+## 移动端方向（2026-08-06 决定）
+- **目标**: 上线 Google Play（Android）。不做 iOS（Windows 无法签名/上架，需 Mac + Xcode）。
+- **技术路线**: 首选 **Tauri Mobile**（Rust/SQLite 复用、零重写，Windows 可构建 APK/AAB，需 Android Studio + NDK + JDK 17）；备选 Capacitor（需把 `db.rs` SQL 层重写为 TS，仅未来上 iOS 才更值得）。
+- **电脑端预览手机 UI**: 已装 **Responsively App** v1.18.0（`winget install --id Responsively.ResponsivelyApp`），地址栏输入 `http://localhost:1420` 多设备并排预览。注意其浏览器内核中 Tauri `invoke` 不可用。
+- 详细记录见 `docs/mobile-app.md`。
+- 开放问题: 手机/桌面数据同步（无账号体系）、移动端 UI 适配。
+
 ## GitHub
 - 仓库: `https://github.com/KangoLin/Todo.git`
 - Commit 用中文，前缀 `feat:` / `fix:` / `chore:`
