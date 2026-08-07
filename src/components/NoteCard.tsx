@@ -146,6 +146,7 @@ export function NoteCard({
           onDrop={(e) => { e.preventDefault(); onDropItem(card.id, card.items.length) }}>
           {card.items.map((item, i) => (
             <div key={item.id} draggable={!isTouch}
+              onContextMenu={(e) => e.preventDefault()}
               onTouchStart={(e) => startItemTouch(e)}
               onTouchMove={moveItemTouch}
               onTouchEnd={(e) => endItemTouch(e, card.id, item.id)}
@@ -155,7 +156,7 @@ export function NoteCard({
               onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropItem(card.id, i) }}
               onDragEnd={onDragItemEnd}
               onClick={() => handleItemClick(card.id, item.id)}
-              className={'border rounded-lg transition-all duration-200 cursor-pointer touch-manipulation hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgb(var(--shadow-rgb)/var(--shadow-hover-opacity))] active:scale-[0.98] ' +
+              className={'select-none border rounded-lg transition-all duration-200 cursor-pointer touch-manipulation hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgb(var(--shadow-rgb)/var(--shadow-hover-opacity))] active:scale-[0.98] ' +
                 (item.done
                   ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 border-l-[3px] border-l-rose-300'
                   : 'border-[var(--border-item)] bg-transparent hover:bg-[var(--bg-surface-hover)] border-l-[3px] border-l-transparent hover:border-l-[var(--accent)]')}>

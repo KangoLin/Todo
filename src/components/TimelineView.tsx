@@ -157,12 +157,13 @@ export function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddIte
                       <div className={hasTimed ? 'mt-2 space-y-0.5' : 'space-y-0.5'}>
                         {noTimeByDate[dateKey].map(it => (
                           <button key={it.id}
+                            onContextMenu={(e) => e.preventDefault()}
                             onTouchStart={(e) => startTouch(e)}
                             onTouchMove={moveTouch}
                             onTouchEnd={(e) => endTouch(e, it.cardId, it.id)}
                             onTouchCancel={clearTouch}
                             onClick={() => handleClick(it.cardId, it.id)}
-                            className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg touch-manipulation hover:bg-[var(--bg-surface)]/20 transition-colors active:scale-[0.98]"
+                            className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg select-none touch-manipulation hover:bg-[var(--bg-surface)]/20 transition-colors active:scale-[0.98]"
                             style={{ borderLeft: `2px solid ${it.color}`, paddingLeft: '10px' }}>
                             <span className="truncate flex-1 text-stone-600 dark:text-stone-400">{it.text || it.cardTitle || '无标题'}</span>
                             {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 text-[10px]">{it.cardTitle}</span>}

@@ -605,7 +605,7 @@ export default function App() {
             {/* 长按移动菜单（触屏）：锚定在长按位置，含箭头排序 + 跨天移动 */}
             <DropdownMenu.Root open={!!moveMenu} onOpenChange={(o) => { if (!o) setMoveMenu(null) }}>
               <DropdownMenu.Trigger asChild>
-                <div style={{ position: 'fixed', left: moveMenu?.x ?? 0, top: moveMenu?.y ?? 0, width: 1, height: 1 }} />
+                <div className="pointer-events-none" style={{ position: 'fixed', left: moveMenu?.x ?? 0, top: moveMenu?.y ?? 0, width: 1, height: 1 }} />
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 {moveMenu && (
