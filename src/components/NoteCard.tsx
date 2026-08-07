@@ -22,6 +22,8 @@ export interface NoteCardProps {
   onCardDragOver: (e: React.DragEvent, id: string) => void
   onCardDragEnd: () => void
   draggingTask: boolean
+  isTouch: boolean
+  onOpenMoveMenu: (cardId: string, itemId: string, x: number, y: number) => void
 }
 
 export function NoteCard({
@@ -41,6 +43,8 @@ export function NoteCard({
   onCardDragOver,
   onCardDragEnd,
   draggingTask,
+  isTouch,
+  onOpenMoveMenu,
 }: NoteCardProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -48,8 +52,52 @@ export function NoteCard({
 
   const [collapsed, setCollapsed] = useState(false)
 
+  // 触屏长按检测：按住 0.5s 且位移 < 10px 视为长按；松手后打开移动菜单
+  const touchRef = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> | null; fired: boolean } | null>(null)
+  const suppressClickRef = useRef(false)
+
+  const clearItemTouch = () => {
+    const st = touchRef.current
+    if (!st) return
+    if (st.timer) clearTimeout(st.timer)
+    touchRef.current = null
+  }
+
+  const startItemTouch = (e: React.TouchEvent) => {
+    if (!isTouch) return
+    suppressClickRef.current = false
+    const t = e.touches[0]
+    const st = { x: t.clientX, y: t.clientY, timer: null as ReturnType<typeof setTimeout> | null, fired: false }
+    touchRef.current = st
+    st.timer = setTimeout(() => { st.fired = true }, 500)
+  }
+
+  const moveItemTouch = (e: React.TouchEvent) => {
+    const st = touchRef.current
+    if (!st) return
+    const t = e.touches[0]
+    if (Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10) clearItemTouch()
+  }
+
+  const endItemTouch = (e: React.TouchEvent, cardId: string, itemId: string) => {
+    const st = touchRef.current
+    clearItemTouch()
+    if (!st || !st.fired) return
+    const t = e.changedTouches[0]
+    suppressClickRef.current = true
+    onOpenMoveMenu(cardId, itemId, t.clientX, t.clientY)
+  }
+
+  const handleItemClick = (cardId: string, itemId: string) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    onOpenItem(cardId, itemId)
+  }
+
   return (
-    <div draggable
+    <div draggable={!isTouch}
       onDragStart={() => onCardDragStart(card.id)}
       onDragOver={(e) => {
         if (draggingTask) {
@@ -97,13 +145,17 @@ export function NoteCard({
           }}
           onDrop={(e) => { e.preventDefault(); onDropItem(card.id, card.items.length) }}>
           {card.items.map((item, i) => (
-            <div key={item.id} draggable
+            <div key={item.id} draggable={!isTouch}
+              onTouchStart={(e) => startItemTouch(e)}
+              onTouchMove={moveItemTouch}
+              onTouchEnd={(e) => endItemTouch(e, card.id, item.id)}
+              onTouchCancel={clearItemTouch}
               onDragStart={() => onDragItemStart(card.id, i)}
               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragItemOver(card.id, i) }}
               onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropItem(card.id, i) }}
               onDragEnd={onDragItemEnd}
-              onClick={() => onOpenItem(card.id, item.id)}
-              className={'border rounded-lg transition-all duration-200 cursor-pointer hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgb(var(--shadow-rgb)/var(--shadow-hover-opacity))] active:scale-[0.98] ' +
+              onClick={() => handleItemClick(card.id, item.id)}
+              className={'border rounded-lg transition-all duration-200 cursor-pointer touch-manipulation hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgb(var(--shadow-rgb)/var(--shadow-hover-opacity))] active:scale-[0.98] ' +
                 (item.done
                   ? 'border-rose-200 bg-rose-50 hover:bg-rose-100 border-l-[3px] border-l-rose-300'
                   : 'border-[var(--border-item)] bg-transparent hover:bg-[var(--bg-surface-hover)] border-l-[3px] border-l-transparent hover:border-l-[var(--accent)]')}>

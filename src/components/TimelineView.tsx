@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Calendar, Clock, Plus } from 'lucide-react'
 
 import type { Card, Item } from '../lib/types'
@@ -5,13 +6,59 @@ import { CARD_COLORS } from '../lib/constants'
 import { calcMinutes, timeToMinutes, formatDateLabel } from '../lib/utils'
 import { TimeGrid } from './TimeGrid'
 
-export function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem }: {
+export function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddItem, isTouch, onOpenMoveMenu }: {
   cards: Card[];
   onOpenItem: (cardId: string, itemId: string) => void;
   onUpdateItem: (cardId: string, itemId: string, field: keyof Item, value: unknown) => void;
   onTimelineAddItem: (date: string) => void;
+  isTouch: boolean;
+  onOpenMoveMenu: (cardId: string, itemId: string, x: number, y: number) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10)
+
+  // 触屏长按检测（同 NoteCard）：按住 0.5s 且位移 < 10px 视为长按，松手打开移动菜单
+  const touchRef = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> | null; fired: boolean } | null>(null)
+  const suppressClickRef = useRef(false)
+
+  const clearTouch = () => {
+    const st = touchRef.current
+    if (!st) return
+    if (st.timer) clearTimeout(st.timer)
+    touchRef.current = null
+  }
+
+  const startTouch = (e: React.TouchEvent) => {
+    if (!isTouch) return
+    suppressClickRef.current = false
+    const t = e.touches[0]
+    const st = { x: t.clientX, y: t.clientY, timer: null as ReturnType<typeof setTimeout> | null, fired: false }
+    touchRef.current = st
+    st.timer = setTimeout(() => { st.fired = true }, 500)
+  }
+
+  const moveTouch = (e: React.TouchEvent) => {
+    const st = touchRef.current
+    if (!st) return
+    const t = e.touches[0]
+    if (Math.hypot(t.clientX - st.x, t.clientY - st.y) > 10) clearTouch()
+  }
+
+  const endTouch = (e: React.TouchEvent, cardId: string, itemId: string) => {
+    const st = touchRef.current
+    clearTouch()
+    if (!st || !st.fired) return
+    const t = e.changedTouches[0]
+    suppressClickRef.current = true
+    onOpenMoveMenu(cardId, itemId, t.clientX, t.clientY)
+  }
+
+  const handleClick = (cardId: string, itemId: string) => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    onOpenItem(cardId, itemId)
+  }
 
   const timedItems = cards.flatMap((card, ci) =>
     card.items
@@ -109,8 +156,13 @@ export function TimelineView({ cards, onOpenItem, onUpdateItem, onTimelineAddIte
                     {hasNoTime && (
                       <div className={hasTimed ? 'mt-2 space-y-0.5' : 'space-y-0.5'}>
                         {noTimeByDate[dateKey].map(it => (
-                          <button key={it.id} onClick={() => onOpenItem(it.cardId, it.id)}
-                            className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg hover:bg-[var(--bg-surface)]/20 transition-colors active:scale-[0.98]"
+                          <button key={it.id}
+                            onTouchStart={(e) => startTouch(e)}
+                            onTouchMove={moveTouch}
+                            onTouchEnd={(e) => endTouch(e, it.cardId, it.id)}
+                            onTouchCancel={clearTouch}
+                            onClick={() => handleClick(it.cardId, it.id)}
+                            className="w-full text-left flex items-center gap-2 pr-2.5 py-1.5 text-xs rounded-lg touch-manipulation hover:bg-[var(--bg-surface)]/20 transition-colors active:scale-[0.98]"
                             style={{ borderLeft: `2px solid ${it.color}`, paddingLeft: '10px' }}>
                             <span className="truncate flex-1 text-stone-600 dark:text-stone-400">{it.text || it.cardTitle || '无标题'}</span>
                             {it.cardTitle && <span className="text-stone-400 dark:text-stone-500 shrink-0 text-[10px]">{it.cardTitle}</span>}

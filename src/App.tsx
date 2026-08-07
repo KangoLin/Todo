@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Plus, X, Search, LayoutGrid, CalendarDays } from 'lucide-react'
+import { Plus, X, Search, LayoutGrid, CalendarDays, ChevronUp, ChevronDown } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { NoteCard } from './components/NoteCard'
 import { TaskDetailModal } from './components/TaskDetailModal'
 import { TodayBriefing } from './components/TodayBriefing'
@@ -14,7 +15,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import type { TabId } from './components/BottomTabBar'
 import type { Item, Card, Project, ProjectTag } from './lib/types'
 import { PROJECT_COLORS } from './lib/constants'
-import { genId } from './lib/utils'
+import { genId, formatDateLabel } from './lib/utils'
 import { applyTheme } from './lib/theme'
 
 export default function App() {
@@ -52,6 +53,11 @@ export default function App() {
   const [showStats, setShowStats] = useState(false)
   const [showPomodoro, setShowPomodoro] = useState(false)
   const [tab, setTab] = useState<TabId>('base')
+
+  // 触屏设备判定：触屏下禁用 HTML5 拖拽，改用长按移动菜单 + 箭头排序
+  const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+  // 长按菜单：cardId/itemId + 手指抬起位置（用于锚定菜单弹出点）
+  const [moveMenu, setMoveMenu] = useState<{ cardId: string; itemId: string; x: number; y: number } | null>(null)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -297,6 +303,66 @@ export default function App() {
     dragItemInfo.current = null
   }, [])
 
+  // ===== 触控双轨：长按移动菜单 + 箭头排序（触屏） =====
+
+  // 长按 0.5s 后触发：打开「移动至」菜单，锚定在手指位置
+  const handleOpenMoveMenu = useCallback((cardId: string, itemId: string, x: number, y: number) => {
+    setMoveMenu({ cardId, itemId, x, y })
+  }, [])
+
+  // 把事项移动到目标卡片（复用 handleDropItem 的跨天本地更新思路：源卡移除、目标卡末尾追加）
+  const handleMoveItem = async (itemId: string, targetCardId: string) => {
+    if (!moveMenu) return
+    const srcCard = cardsRef.current.find(c => c.id === moveMenu.cardId)
+    const item = srcCard?.items.find(i => i.id === itemId)
+    setMoveMenu(null)
+    if (!srcCard || !item || targetCardId === srcCard.id) return
+    const tgtCard = cardsRef.current.find(c => c.id === targetCardId)
+    const tgtIds = [...(tgtCard?.items ?? []), item].map(i => i.id)
+    setCards(prev => prev.map(c => {
+      if (c.id === srcCard.id) return { ...c, items: c.items.filter(i => i.id !== itemId) }
+      if (c.id === targetCardId) return { ...c, items: [...c.items, item] }
+      return c
+    }))
+    try { await invoke('move_item', { id: itemId, targetCardId }) } catch { /* 忽略失败（本地已更新） */ }
+    try { await invoke('reorder_items', { ids: tgtIds }) } catch { /* 忽略失败（本地已更新） */ }
+  }
+
+  // 无日期卡片时：新建今天便签并移动
+  const handleMoveToNewCard = async () => {
+    if (!moveMenu) return
+    const srcCard = cardsRef.current.find(c => c.id === moveMenu.cardId)
+    const item = srcCard?.items.find(i => i.id === moveMenu.itemId)
+    setMoveMenu(null)
+    if (!srcCard || !item) return
+    try {
+      const card = await invoke<Card>('create_card', { projectId: currentProjectId })
+      const today = new Date().toISOString().slice(0, 10)
+      await invoke('update_card', { id: card.id, date: today })
+      await invoke('move_item', { id: item.id, targetCardId: card.id })
+      setCards(prev => [
+        ...prev.map(c => c.id === srcCard.id ? { ...c, items: c.items.filter(i => i.id !== item.id) } : c),
+        { ...card, date: today, items: [item] },
+      ])
+    } catch { /* 忽略失败（本地无需回滚） */ }
+  }
+
+  // 箭头排序：同卡片内相邻交换，与 handleDropItem 同卡分支一致
+  const handleArrowReorder = (dir: 1 | -1) => {
+    if (!moveMenu) return
+    const card = cardsRef.current.find(c => c.id === moveMenu.cardId)
+    if (!card) return
+    const srcIdx = card.items.findIndex(i => i.id === moveMenu.itemId)
+    if (srcIdx === -1) return
+    const newIdx = srcIdx + dir
+    if (newIdx < 0 || newIdx >= card.items.length) return
+    const ids = [...card.items]
+    const [moved] = ids.splice(srcIdx, 1)
+    ids.splice(newIdx, 0, moved)
+    setCards(prev => prev.map(c => c.id === card.id ? { ...c, items: ids } : c))
+    invoke('reorder_items', { ids: ids.map(i => i.id) }).catch(() => {})
+  }
+
   const handleCardDragStart = useCallback((id: string) => {
     dragCardIdx.current = id
   }, [])
@@ -405,6 +471,22 @@ export default function App() {
     return () => clearTimeout(t)
   }, [searchQuery])
 
+  // 长按菜单内容：源事项位置 + 可移动的日期目标卡片（有日期的卡片按日期取最近 5 个）
+  const menuInfo = (() => {
+    if (!moveMenu) return null
+    const srcCard = cards.find(c => c.id === moveMenu.cardId)
+    if (!srcCard) return null
+    const srcIdx = srcCard.items.findIndex(i => i.id === moveMenu.itemId)
+    if (srcIdx === -1) return null
+    const byDate = new Map<string, string>()
+    cards.forEach(c => { if (c.date && c.id !== moveMenu.cardId && !byDate.has(c.date)) byDate.set(c.date, c.id) })
+    const targets = Array.from(byDate.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .slice(0, 5)
+      .map(([date, cardId]) => ({ cardId, label: formatDateLabel(date) }))
+    return { srcIdx, lastIdx: srcCard.items.length - 1, targets }
+  })()
+
   return (
     <div className="min-h-[100dvh] bg-gradient-to-b from-[var(--bg-page)] to-[var(--bg-page-to)] flex flex-col">
       <main className="flex-1 min-w-0 mx-auto w-full max-w-7xl p-4 md:p-6">
@@ -500,6 +582,8 @@ export default function App() {
                     onCardDragOver={handleCardDragOver}
                     onCardDragEnd={handleCardDragEnd}
                     draggingTask={draggingTask}
+                    isTouch={isTouch}
+                    onOpenMoveMenu={handleOpenMoveMenu}
                   />
                 ))
                 )}
@@ -513,10 +597,59 @@ export default function App() {
                 </>
               ) : (
                 <div className="flex-1 min-h-0">
-                  <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} onTimelineAddItem={handleTimelineAddItem} />
+                  <TimelineView cards={filteredCards} onOpenItem={handleOpenItem} onUpdateItem={handleUpdateItem} onTimelineAddItem={handleTimelineAddItem} isTouch={isTouch} onOpenMoveMenu={handleOpenMoveMenu} />
                 </div>
               )}
             </div>
+
+            {/* 长按移动菜单（触屏）：锚定在长按位置，含箭头排序 + 跨天移动 */}
+            <DropdownMenu.Root open={!!moveMenu} onOpenChange={(o) => { if (!o) setMoveMenu(null) }}>
+              <DropdownMenu.Trigger asChild>
+                <div style={{ position: 'fixed', left: moveMenu?.x ?? 0, top: moveMenu?.y ?? 0, width: 1, height: 1 }} />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                {moveMenu && (
+                  <DropdownMenu.Content side="bottom" align="start" sideOffset={10}
+                    className="z-50 min-w-[200px] bg-white dark:bg-[var(--bg-card-start)] border border-[var(--border-item)] rounded-xl shadow-[0_8px_32px_rgb(var(--shadow-rgb)/var(--shadow-modal-opacity))] p-1">
+                    {menuInfo && (
+                      <>
+                        <div className="flex items-center gap-1 px-2 py-1">
+                          <span className="text-[10px] font-semibold text-stone-400 dark:text-stone-500 flex-1">调整顺序</span>
+                          <button onClick={() => handleArrowReorder(-1)} disabled={menuInfo.srcIdx === 0}
+                            title="上移"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-500 dark:text-stone-400 hover:bg-[var(--bg-surface-hover)] hover:text-[var(--accent)] transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-90">
+                            <ChevronUp size={14} />
+                          </button>
+                          <button onClick={() => handleArrowReorder(1)} disabled={menuInfo.srcIdx === menuInfo.lastIdx}
+                            title="下移"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-500 dark:text-stone-400 hover:bg-[var(--bg-surface-hover)] hover:text-[var(--accent)] transition-colors disabled:opacity-30 disabled:pointer-events-none active:scale-90">
+                            <ChevronDown size={14} />
+                          </button>
+                        </div>
+                        <div className="mx-2 h-px bg-[var(--border-divider)]/40" />
+                      </>
+                    )}
+                    <DropdownMenu.Label className="px-2 py-1 text-[10px] font-semibold text-stone-400 dark:text-stone-500">移动至</DropdownMenu.Label>
+                    {menuInfo && menuInfo.targets.map(d => (
+                      <DropdownMenu.Item key={d.cardId} onSelect={() => handleMoveItem(moveMenu.itemId, d.cardId)}
+                        className="px-2 py-1.5 text-xs rounded-lg outline-none cursor-pointer data-[highlighted]:bg-[var(--bg-surface-hover)] data-[highlighted]:text-[var(--accent)]">
+                        {d.label}
+                      </DropdownMenu.Item>
+                    ))}
+                    {(!menuInfo || menuInfo.targets.length === 0) && (
+                      <DropdownMenu.Item onSelect={() => handleMoveToNewCard()}
+                        className="px-2 py-1.5 text-xs rounded-lg outline-none cursor-pointer data-[highlighted]:bg-[var(--bg-surface-hover)] data-[highlighted]:text-[var(--accent)]">
+                        新建便签并移动（今天）
+                      </DropdownMenu.Item>
+                    )}
+                    <DropdownMenu.Item onSelect={() => setMoveMenu(null)}
+                      className="px-2 py-1.5 text-xs rounded-lg outline-none cursor-pointer data-[highlighted]:bg-[var(--bg-surface-hover)] text-stone-400 dark:text-stone-500">
+                      取消
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                )}
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </>
         )}
 
